@@ -8,7 +8,7 @@ export const BLOCK_NOTICE_BODY =
 /** In-place notice (no toast) shown when a request is refused and its Blocked row is not on screen. */
 export function BlockNotice(props: { onDismiss: () => void }) {
   return (
-    <Note title={BLOCK_NOTICE_TITLE} role="status">
+    <Note title={BLOCK_NOTICE_TITLE} role="alert">
       <p>{BLOCK_NOTICE_BODY}</p>
       <WordButton onClick={props.onDismiss} className="justify-self-start">
         Dismiss

@@ -71,8 +71,7 @@ export function VerifierLane() {
                   {report.record.checks.map((c) => (
                     <li key={c.id}>
                       <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
-                      {c.id}{" "}
-                      <span className="font-semibold">{c.status === "PASS" ? "pass" : "fail"}</span>
+                      {c.id}: {c.status === "PASS" ? "passed" : "failed"}
                     </li>
                   ))}
                 </ul>

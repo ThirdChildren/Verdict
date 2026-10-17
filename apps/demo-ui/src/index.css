@@ -54,7 +54,7 @@
   --color-border: var(--rule-soft);
   --color-input: var(--rule);
   --color-ring: var(--ink);
-  /* Square everything, no shadows. */
+  /* Square everything. */
   --radius-xs: 0;
   --radius-sm: 0;
   --radius-md: 0;
@@ -62,13 +62,6 @@
   --radius-xl: 0;
   --radius-2xl: 0;
   --radius-3xl: 0;
-  --shadow-2xs: none;
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-  --shadow-xl: none;
-  --shadow-2xl: none;
   /* Two faces only. Plex is used when installed; the fallbacks are system faces, so nothing is fetched at runtime. */
   --font-sans: "IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;

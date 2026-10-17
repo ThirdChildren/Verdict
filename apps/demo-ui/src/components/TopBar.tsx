@@ -24,7 +24,7 @@ export function TopBar(props: {
     <header className="flex flex-nowrap items-center gap-x-5 border-b-2 border-ink bg-paper px-6 py-3 [.presenter_&]:gap-x-3">
       <div className="flex shrink-0 items-baseline gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Verdict</h1>
-        <span className="hidden font-mono text-sm whitespace-nowrap text-subtle min-[1360px]:inline [.presenter_&]:hidden">
+        <span className="font-mono text-sm whitespace-nowrap text-subtle [.presenter_&]:hidden">
           regtest · tUSD
         </span>
       </div>

@@ -44,7 +44,7 @@ function Stepper({ step }: { step: number }) {
           aria-current={i === step ? "step" : undefined}
           className={`flex items-baseline gap-x-3 uppercase ${i === step ? "font-semibold text-ink" : "text-subtle"}`}
         >
-          {i > 0 && <span aria-hidden>—</span>}
+          {i > 0 && <span aria-hidden>›</span>}
           <span>
             <span className="font-mono">{i + 1}</span> {label}
           </span>
@@ -257,7 +257,7 @@ function ReviewStep(props: {
             </Note>
           ))}
       </div>
-      <div className="sticky bottom-0 -mb-4 flex gap-3 border-t border-rule bg-paper py-4">
+      <div className="sticky bottom-0 -mb-6 flex gap-3 border-t border-rule bg-paper py-4">
         <Button type="button" variant="outline" onClick={props.onBack}>
           Back
         </Button>
@@ -315,7 +315,7 @@ export function MandateWizard(props: { open: boolean; onOpenChange: (open: boole
   };
   return (
     <Dialog open={props.open} onOpenChange={close}>
-      <DialogContent className="h-screen max-h-screen content-start gap-6 overflow-auto p-8 sm:max-w-3xl">
+      <DialogContent className="content-start gap-6">
         <div className="mx-auto grid w-full max-w-3xl gap-4">
           <header className="grid gap-3">
             <DialogTitle className="text-3xl font-semibold">Create mandate</DialogTitle>

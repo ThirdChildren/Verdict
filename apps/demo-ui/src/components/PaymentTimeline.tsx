@@ -11,7 +11,7 @@ export const TIMELINE: { status: PaymentStatus; label: string }[] = [
 
 export const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
-/** Escrow history as one mono line: STATE time → STATE time. The last reached state is bold. */
+/** Escrow history as one mono line: STATE time › STATE time. The last reached state is bold. */
 export function Timeline({ history }: { history: PaymentStep[] }) {
   const at = (s: PaymentStatus) => history.find((h) => h.status === s)?.at;
   const failed = at("Failed");
@@ -33,7 +33,7 @@ export function Timeline({ history }: { history: PaymentStep[] }) {
             aria-current={isCur ? "step" : undefined}
             className={`flex items-baseline gap-x-2 ${when ? "text-ink" : ""} ${isCur ? "font-semibold" : ""}`}
           >
-            {i > 0 && <span aria-hidden>→</span>}
+            {i > 0 && <span aria-hidden>›</span>}
             <span>{r.label}</span>
             <span className="font-normal">{when ? timeOf(when) : "not yet"}</span>
           </li>

@@ -67,7 +67,7 @@ describe("EmptyState and block notice", () => {
     const onDismiss = vi.fn();
     render(<BlockNotice onDismiss={onDismiss} />);
     expect(screen.getByText(BLOCK_NOTICE_TITLE)).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("No funds moved");
+    expect(screen.getByRole("alert").textContent).toContain("No funds moved");
     expect(BLOCK_NOTICE_BODY).toContain("Nothing was signed. No funds moved.");
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(onDismiss).toHaveBeenCalled();
