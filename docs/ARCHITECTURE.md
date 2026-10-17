@@ -329,7 +329,7 @@ Each code has a message template, e.g. `AMOUNT_EXCEEDS_PER_TASK`: "The agent ask
 - Models are pre-downloaded before the demo (QVAC cache) — never download on stage.
 - Fixed temperature and seed; bounded `max_tokens`; `ctx_size` sized to the prompt.
 - Worker retries: regenerate with the failing check output appended, until `deadline - max_verify_seconds`.
-- Known-good cached delivery is the last-resort fallback and is always labelled in UI and logs.
+- There is no cached or canned delivery: after three attempts the worker hands in its best attempt (self-check result attached) or the verifier fails it. A delivery the model did not write would be a fake, and the demo never shows one.
 - `responseFormat` cannot be combined with `tools` in the QVAC SDK; we use `responseFormat` + Zod validation.
 
 ## 11. UI (demo-ui)
