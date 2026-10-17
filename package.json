@@ -1,0 +1,51 @@
+{
+  "name": "verdict",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n engine,signer,buyer,worker,ui -c blue,cyan,magenta,green,yellow \"pnpm --filter @verdict/capability-engine dev\" \"pnpm --filter @verdict/principal-signer dev\" \"pnpm --filter @verdict/buyer-agent dev\" \"pnpm --filter @verdict/worker dev\" \"pnpm --filter @verdict/demo-ui dev\"",
+    "ui:shots": "tsx scripts/ui-shots.ts",
+    "dev:verifier": "pnpm --filter @verdict/verifier dev",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run --reporter=dot",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
+    "regtest:up": "bash scripts/regtest.sh up",
+    "regtest:down": "bash scripts/regtest.sh down",
+    "regtest:reset": "bash scripts/regtest.sh reset",
+    "regtest:mine": "bash scripts/regtest.sh mine",
+    "regtest:setup": "bash scripts/regtest.sh setup",
+    "demo:reset": "tsx scripts/demo-reset.ts",
+    "verifier:hash": "tsx scripts/verifier-hash.ts",
+    "doctor": "bash scripts/doctor.sh",
+    "keys:init": "tsx scripts/keys-init.ts",
+    "dev:stop": "tsx scripts/dev-stop.ts",
+    "dev:stack": "tsx scripts/dev-stack.ts",
+    "net:info": "tsx scripts/net-info.ts",
+    "attack:compromised": "tsx scripts/attack/compromised-agent.ts",
+    "data:perms": "tsx scripts/check-data-perms.ts",
+    "preflight": "bash scripts/preflight.sh",
+    "wallet:daemons": "tsx scripts/wallet-daemons.ts",
+    "verifier:rerun": "pnpm --filter @verdict/verifier rerun",
+    "demo:expire": "tsx scripts/demo-expire.ts",
+    "verifier:selftest": "pnpm --filter @verdict/verifier selftest",
+    "verifier:keys": "pnpm --filter @verdict/verifier keys",
+    "keys:set-verifier": "tsx scripts/keys-set-verifier.ts",
+    "test:e2e:lan": "VERDICT_E2E_LAN=1 vitest run --config tests/e2e/vitest.config.ts escrow-verdict"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.2",
+    "concurrently": "10.0.6",
+    "fast-check": "4.10.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

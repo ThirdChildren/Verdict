@@ -1,0 +1,20 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/dist-types",
+      "!**/node_modules",
+      "!spikes",
+      "!scripts/spikes",
+      "!infra/regtest/issuer",
+      "!pnpm-lock.yaml"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": { "rules": { "preset": "recommended", "suspicious": { "noExplicitAny": "error" } } },
+  "javascript": { "formatter": { "quoteStyle": "double" } },
+  "css": { "parser": { "tailwindDirectives": true } }
+}

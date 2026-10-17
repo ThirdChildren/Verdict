@@ -1,0 +1,16 @@
+packages:
+  - packages/*
+  - services/*
+  - apps/*
+  - tests/*
+# spikes/, scripts/spikes/ and infra/regtest/issuer/ have their own workspace files and are NOT members.
+# Build scripts are approved one by one (never dangerouslyAllowAllBuilds).
+allowBuilds:
+  "@utexo/rgb-lightning-node-nodejs": true # postinstall: cargo build (Rust 1.88.0, about 20 min)
+  better-sqlite3: true # node-gyp build (needs a C++ toolchain)
+  esbuild: true # tsx and vite platform binary
+# Supply-chain gate: refuse packages published less than 1 day ago (minutes).
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@fastify/websocket@11.3.4"
+  - "@types/node@24.19.2"
