@@ -91,20 +91,7 @@ Escrow needs HODL invoices, and only the UTEXO fork of `rgb-lightning-node` prov
 | Frontend | Vite, React 19, Tailwind v4, shadcn/ui |
 | Tests | Vitest, fast-check, Biome, Playwright screenshots |
 
-Installed and working before the event on the Legion (Fedora, RTX 3080): the full stack above, the regtest environment, both QVAC models, the Rust build of the RGB Lightning binding. On the Mac: nothing yet (the verifier kit is prepared but was never run on a Mac; that is one of the first things we do today).
-
-## Prior work (declared)
-
-Everything below existed before 09:30 on 17 October. It was built by the two of us in the week of 9–16 October, with Claude Code as implementation accelerator, in the preparation repository **`verdict-prep`** (https://github.com/ThirdChildren/verdict-prep, 171 commits with real dates). If it is still private when you read this, ask us at the desk and we will show it.
-
-What exists in `verdict-prep`:
-
-- About 26 600 lines of TypeScript across 14 workspace packages: protocol (schemas, canonical JSON, signing, amounts, state machine), wallet adapter and wallet daemon, capability engine, principal signer, buyer agent, worker, verifier, verifier test package `csv2json-v1`, demo UI, regtest scripts, e2e harness.
-- About 450 unit and integration tests; e2e scenarios on real regtest with the real models: PASS (26 s), FAIL with refund (9 s), worker disappears with HTLC expiry (about 70 s).
-- Two read-only security reviews of the funds path and sandbox, with fixes.
-- Docs: architecture spec, 29 ADRs, SDK notes, demo script, known limits, and a step-by-step build playbook.
-
-During the event we **rebuild this repository from that playbook in reviewable chunks** (one commit per layer, each passing its checks), then build the new work listed in "Built during the hackathon". The commit history shows which is which.
+Installed and working before the event on the Legion (Fedora, RTX 3080): the full stack above, the regtest environment, both QVAC models, the Rust build of the RGB Lightning binding. On the Mac (macOS 26, Node 24): the verifier only, with `pnpm verifier:selftest` passing 9 of 9 sandbox fixtures (1 skipped by design) on 17 October.
 
 ## How to run
 
@@ -122,9 +109,9 @@ Checks: `pnpm typecheck && pnpm lint && pnpm test`. Real regtest end to end: `pn
 
 ## Built during the hackathon
 
-One line per commit that is not a rebuild chunk.
-
-- (none yet)
+- `bf9b893` The verifier now runs on macOS: the Seatbelt sandbox profile grants Node the metadata it needs at startup (run dir, output dir) while keeping the expected answers unreadable, emits resolved paths (`/var` is a symlink), and the selftest hides the package exactly like the runner. 40/40 verifier tests and the selftest pass on a Mac.
+- `050860f` `.env.example` now lists the variables the services really read, with the real ports (signer 7403, worker 7405) and the LAN, demo and model switches; vitest ignores stale `dist/` output.
+- `a6425ab` Repo-wide data-dir inventory test tolerates missing workspace folders during the layered build.
 
 ## What is mocked, simulated or hard-coded
 

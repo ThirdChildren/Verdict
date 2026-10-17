@@ -78,7 +78,7 @@ Official sources only (CLAUDE.md "Dependencies"). Before pinning: `npm view` for
 **What Mutinynet could add:** a "this also runs on a public test network" moment with an explorer link and faucet USDT. Worth it only if spike 8 passes three times in a row before 16 Oct.
 
 ### ADR-018 — Build log and token budget
-Every finished step is documented by the `scribe` subagent (Haiku) in `docs/playbook/`. The playbook is the context for the next session, used instead of re-reading code, and the recipe for the event rebuild. Token rules live in CLAUDE.md "Token discipline": one step per session with `/clear`, narrow reads, package-scoped tests, reviews and e2e only at gates, reports of 150 words or less.
+Every finished step is documented by the `scribe` subagent (Haiku) in a build log kept outside this repository. The build log is the context for the next session, used instead of re-reading code. Token rules live in CLAUDE.md "Token discipline": one step per session with `/clear`, narrow reads, package-scoped tests, reviews and e2e only at gates, reports of 150 words or less.
 
 ### ADR-019 — LLM-facing intent schema and buyer model
 **Context:** P0.2 showed that QVAC's `responseFormat` grammar ignores regex patterns: with the protocol spend-intent schema the 4B model passed Zod only 1 time in 10 (amounts like "{1.10 tUSD}"). P0.2b showed that a regex-free schema gives 20/20 valid on 4B and 8B, including 5 adversarial inputs. Qwen3.5 9B fails on any `responseFormat` ("empty grammar stack"). 4B misread 2 of 15 amounts, 8B none of 15.

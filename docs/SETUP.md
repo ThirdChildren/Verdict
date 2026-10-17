@@ -78,17 +78,7 @@ cd rgb-lightning-node && ./regtest.sh start
 With Podman and "permission denied" on `./datacore` or similar, add `:z` to those volume lines in `compose.yaml` (SELinux label) and retry.
 Check: the start finishes without errors, and `ss -ltn | grep :3000` is empty after the stop.
 
-### 7. Prep repository + kit
-```bash
-mkdir -p ~/src/verdict-prep && cd ~/src/verdict-prep
-git init
-unzip ~/Downloads/verdict-claude-kit.zip && cp -r verdict-kit/. . && rm -rf verdict-kit
-git add . && git commit -m "chore: add Claude Code kit (CLAUDE.md, agents, docs)"
-```
-Create the empty GitHub repo `verdict-prep` and push. It is the record of the preparation that the event repo links to.
-Install Claude Code by following the official setup page (code.claude.com/docs), then start it in this folder with `claude`.
-
-### 8. Things the spikes download (they happen in P0, listed here so nothing is forgotten)
+### 7. Things the spikes download (they happen in P0, listed here so nothing is forgotten)
 - `pnpm install` with the RLN binding allowed: compiles RLN in Rust (expect several minutes or more).
   - Measured 2026-10-10 (P2.2): `RLN_NODE_SOURCE_DIR=../rgb-lightning-node pnpm install` took 1.7 s because the pnpm store already held the addon built during P0.3 (no Rust compile ran). The original from-scratch compile time was not recorded; a cold store means the full ~20 min build. Run with `RLN_NODE_SOURCE_DIR` set to the local checkout to avoid cloning.
   - `@qvac/sdk` 0.21.0 is now a devDependency of `@verdict/llm` (about 5 min to install).

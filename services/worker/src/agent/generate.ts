@@ -93,7 +93,7 @@ export class NoCodeError extends Error {
   }
 }
 
-/** Per-attempt token cap. Measured in P3.3 step 0 (see playbook). */
+/** Per-attempt token cap, measured on the Legion with the real 9B. */
 export const DEFAULT_MAX_TOKENS = 4000;
 
 export function llmGenerator(llm: LlmClient, maxTokens = DEFAULT_MAX_TOKENS): Generator {
