@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +28,9 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 describe("single data dir resolution", () => {
+  // During the chunked rebuild some workspace dirs land later; scan the ones present.
   const files = ["packages", "services", "apps", "scripts", "infra", "tests"]
+    .filter((d) => existsSync(join(ROOT, d)))
     .flatMap((d) => sources(join(ROOT, d)))
     .filter((f) => !f.endsWith("data-dir.ts") && !f.endsWith("data-dir.test.ts"));
 
