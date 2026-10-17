@@ -37,6 +37,10 @@ Above the task rail: one ruled row per mandate, newest first, `02 ■ ACTIVE 5.0
 ## Inspector (`i`)
 Tabs as underlined words. Proof: `■ CONTRACT  <hash> COPY  verified in your browser` rows (▲ and MISMATCH when different), signers list with uppercase mono role words (`RoleBadge`), then `WorkerLane` (live token stream, `Attempt n`, tokens/s in mono, sabotage and disappears checkboxes) and `VerifierLane` (PASS/FAIL line, check rows `■ id: passed`, sandbox, hashes, exit code, log tail), live mode only. Events: filter words, one row per message, raw JSON in a mono block with a 1px rule. `Hash` is the one component for hashes: mono, middle-truncated, full value in the title, `COPY` word that becomes `COPIED`.
 
+## Stats (`s`)
+
+STATS word in the verifier lane (and a link from the inspector): one ruled row per test package `csv2json-v1  3f9a…  RUNS 12  PASS 75%  SCORE —  MEDIAN 4.3 s  DETERMINISM 100%  SELF-CHECK 92%`, expandable to one row per check with a ten-cell ink glyph bar and a WITHHOLD row with codes. The verifier lane shows `SCORE 87 / 80 · PROFILE STANDARD` when a run report carries a score; a failed check inside a RELEASE verdict is labelled advisory. Data: `GET /v0/stats`, `GET /v0/verdicts/:task_id`, parsed with Zod.
+
 ## Demo console (`d`)
 Bottom panel ruled above: worker switches, `Simulate compromised agent`, `Mine until refund` with the same progress rule. Results and errors are plain text in place.
 

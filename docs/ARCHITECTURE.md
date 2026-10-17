@@ -317,6 +317,16 @@ Each code has a message template, e.g. `AMOUNT_EXCEEDS_PER_TASK`: "The agent ask
 - **APPROVE is reserved.** The message and the `APPROVED` state exist in the protocol, but nothing in the MVP sends or accepts them.
 - **Delivery sandbox on macOS** (`sandbox-exec`) hides the run dir, the package, the data dir and the repository, blocks writes outside scratch and the network, but leaves other host files readable and has no memory cap (`docs/LIMITS.md` 5–6); the Linux sandbox does not defend against a kernel escape.
 
+### 9.1 Verifier packages, format 2 (general-purpose checks)
+
+A format-2 package keeps the six format-1 fields and adds a list of checks and three strictness profiles, all inside `manifest.json` and therefore inside the content hash that the signed contract carries. Relaxing or tightening a constraint changes the package hash, so it changes the contract both parties sign; nothing about strictness is a runtime knob.
+
+- **Checks:** `fixtures` (hidden cases, exact text after whitespace normalisation, or parsed JSON with key-order insensitivity and numeric tolerance), `schema`, `property` (metamorphic pairs that must give the same output), `static` (banned imports and tokens), `limits` (source size and lines), `spec` (deterministic assertions compiled from the request before signing, such as required or forbidden tokens, output size, numbers present in the input). Each check has an integer weight and a `required` flag; a weight-0 required check is a pure gate.
+- **Profiles:** `strict`, `standard`, `lenient`, each with `min_score`, `required_overrides`, `tolerances` and a determinism level. A floor no profile can relax: at least one required `fixtures`, `schema` or `differential` check, every `static` check required, `min_score` at least 1.
+- **One judge:** every format-2 package carries the generic judge byte for byte; the verifier allow-lists its hash and refuses any other judge, so no package can bring its own judge code outside the sandbox. The runner recomputes the score and the required set from the manifest and the judge's lines and withholds on any disagreement; it runs the judge twice (the executor too under `strict`) and withholds a nondeterministic verdict.
+- **Evidence, not protocol:** score, profile, per-check results, duration, determinism and self-check agreement live in the verifier's run report (`GET /v0/verdicts/:task_id`) and in `GET /v0/stats`; the signed Verdict Record stays at protocol 0.1.3 and still only says RELEASE or WITHHOLD.
+- **Worker side:** a format-2 package drives the worker prompt from its manifest (description, entry, visible cases, rules); hidden cases are never read.
+
 ## 10. QVAC usage
 
 | Where | Model (initial choice, confirm in spike) | Output |
