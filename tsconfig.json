@@ -10,6 +10,7 @@
     { "path": "apps/principal-signer" },
     { "path": "packages/llm" },
     { "path": "services/capability-engine" },
+    { "path": "services/buyer-agent" },
     { "path": "scripts" }
   ]
 }

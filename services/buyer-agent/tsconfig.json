@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/identity" },
+    { "path": "../../packages/wallet" },
+    { "path": "../../packages/mandate-guard" },
+    { "path": "../../packages/http-local" },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/llm"
+    }
+  ]
+}

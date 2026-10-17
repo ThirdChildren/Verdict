@@ -1,0 +1,22 @@
+{
+  "name": "@verdict/buyer-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run --reporter=dot --root ../.. --config vitest.config.ts services/buyer-agent/src"
+  },
+  "dependencies": {
+    "@verdict/http-local": "workspace:*",
+    "@verdict/identity": "workspace:*",
+    "@verdict/llm": "workspace:*",
+    "@verdict/mandate-guard": "workspace:*",
+    "@verdict/protocol": "workspace:*",
+    "@verdict/wallet": "workspace:*",
+    "fastify": "5.12.5",
+    "pino": "10.4.0",
+    "zod": "4.6.5"
+  }
+}
