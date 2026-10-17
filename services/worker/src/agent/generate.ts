@@ -25,10 +25,17 @@ export interface StreamHooks {
   done?: (stats: { tokens: number | null; tokPerSec: number | null } | null) => void;
 }
 
+/** Time budget of one attempt. The generator must stop (abort the model run) when the signal fires. */
+export interface AttemptLimits {
+  signal: AbortSignal;
+  timeoutMs: number;
+}
+
 export type Generator = (
   spec: string,
   retry?: RetryContext,
   hooks?: StreamHooks,
+  limits?: AttemptLimits,
 ) => Promise<Generated>;
 
 // The task text states exactly what the automatic test checks (not the test files themselves), so the model is
@@ -97,7 +104,7 @@ export class NoCodeError extends Error {
 export const DEFAULT_MAX_TOKENS = 4000;
 
 export function llmGenerator(llm: LlmClient, maxTokens = DEFAULT_MAX_TOKENS): Generator {
-  return async (spec, retry, hooks) => {
+  return async (spec, retry, hooks, limits) => {
     const r = await llm.generateText(
       [
         { role: "system", content: SYSTEM },
@@ -117,6 +124,7 @@ export function llmGenerator(llm: LlmClient, maxTokens = DEFAULT_MAX_TOKENS): Ge
       ],
       {
         maxTokens,
+        ...(limits ? { timeoutMs: limits.timeoutMs, signal: limits.signal } : {}),
         ...(hooks?.onToken ? { onToken: hooks.onToken } : {}),
         ...(hooks?.onThinking ? { onThinking: hooks.onThinking } : {}),
       },

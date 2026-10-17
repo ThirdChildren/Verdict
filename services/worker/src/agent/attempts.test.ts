@@ -123,3 +123,73 @@ describe("classifyTps", () => {
     expect(classifyTps(null)).toBe("fail");
   });
 });
+
+describe("deadline handling (E22)", () => {
+  const slow: Generator = (_s, _r, _h, limits) =>
+    new Promise((_, reject) => {
+      limits?.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    });
+
+  it("deadline reached during attempt 2 delivers the best of attempt 1", async () => {
+    let calls = 0;
+    const generator: Generator = (s, r, h, l) =>
+      ++calls === 1 ? Promise.resolve(gen(1)) : slow(s, r, h, l);
+    const t0 = Date.now();
+    const r = await produceDelivery({
+      generator,
+      check: async () => fail,
+      spec: "x",
+      deadlineMs: t0 + 400,
+      maxVerifySeconds: 0,
+      safetySeconds: 0.2,
+    });
+    expect(r.best.n).toBe(1);
+    expect(r.best.check?.outcome).toBe("FAIL");
+    expect(r.attempts.map((a) => a.reason)).toEqual(["done", "timeout"]);
+    expect(calls).toBe(2);
+    expect(Date.now() - t0).toBeLessThan(1500);
+  });
+
+  it("nothing usable before the deadline is a failure, not a hang", async () => {
+    const t0 = Date.now();
+    await expect(
+      produceDelivery({
+        generator: slow,
+        spec: "x",
+        deadlineMs: t0 + 150,
+        maxVerifySeconds: 0,
+        safetySeconds: 0,
+      }),
+    ).rejects.toThrow(/ran out of time/);
+    expect(Date.now() - t0).toBeLessThan(1500);
+  });
+
+  it("attempts carry timestamps and reasons; an external abort is reason aborted", async () => {
+    const ok = await produceDelivery({
+      generator: harness([pass]).generator,
+      check: async () => pass,
+      spec: "x",
+    });
+    const a = ok.attempts[0];
+    expect(a?.reason).toBe("done");
+    expect(Date.parse(a?.started_at ?? "")).toBeLessThanOrEqual(Date.parse(a?.ended_at ?? ""));
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 30);
+    await expect(
+      produceDelivery({ generator: slow, spec: "x", signal: ac.signal }),
+    ).rejects.toThrow(/stopped/);
+  });
+
+  it("a missing sandbox is a failed attempt and nothing is delivered", async () => {
+    const { localSelfCheck } = await import("./selfcheck.js");
+    const check = localSelfCheck({ detect: () => null });
+    const r = await check([{ path: "csv2json.mjs", content: "x" }]);
+    expect(r.outcome).toBe("FAIL");
+    expect(r.feedback).toMatch(/no sandbox/);
+    const h = harness([]);
+    await expect(produceDelivery({ generator: h.generator, check, spec: "x" })).rejects.toThrow(
+      /no sandbox/,
+    );
+    expect(h.calls()).toBe(1);
+  });
+});

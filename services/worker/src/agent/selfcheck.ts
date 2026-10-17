@@ -15,6 +15,9 @@ export interface SelfCheck {
   feedback: string;
 }
 
+/** failedChecks id used when the local sandbox is missing. */
+export const NO_SANDBOX = "sandbox";
+
 export type CheckFn = (files: DeliveryFile[]) => Promise<SelfCheck>;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -78,10 +81,23 @@ export function probeSample(deliveryDir: string): string {
 
 /** Runs the package's own verify.sh through the verifier's sandboxed runner. Never throws: a failure to run is WITHHOLD. */
 export function localSelfCheck(
-  opts: { packageDir?: string; maxVerifySeconds?: number } = {},
+  opts: {
+    packageDir?: string;
+    maxVerifySeconds?: number;
+    /** Test seam; defaults to the verifier's sandbox detection. */
+    detect?: () => unknown;
+  } = {},
 ): CheckFn {
   const packageDir = opts.packageDir ?? process.env.VERIFIER_PACKAGE_DIR ?? DEFAULT_PACKAGE_DIR;
   return async (files) => {
+    // Without a sandbox nothing can be checked, so the attempt counts as failed (it is never delivered unchecked).
+    if ((opts.detect ?? detectSandbox)() === null)
+      return {
+        outcome: "FAIL",
+        failedChecks: [NO_SANDBOX],
+        feedback:
+          "This machine has no sandbox, so the file could not be tested and was not delivered.",
+      };
     const root = mkdtempSync(join(tmpdir(), "worker-selfcheck-"));
     try {
       const { dir } = storeDelivery(root, "check", 1, files);

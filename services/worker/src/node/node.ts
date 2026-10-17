@@ -57,6 +57,9 @@ export interface WorkerTask {
     seconds: number;
     tokens_per_sec: number | null;
     self_check: "PASS" | "FAIL" | "WITHHOLD" | "not run";
+    started_at: string;
+    ended_at: string;
+    reason: "done" | "timeout" | "aborted";
   }[];
   /** Last verdict the verifier signed for this task, as the UI worker lane shows it. */
   verdict?: { attempt: number; verdict: "RELEASE" | "WITHHOLD"; exit_code: number };
@@ -450,6 +453,9 @@ export class WorkerNode {
       ...(this.d.check ? { check: this.d.check } : {}),
       spec: contract.task.spec,
       sabotaged,
+      // The loop stops at deadline - max_verify_seconds - safety and delivers the best attempt so far (E22).
+      deadlineMs: Date.parse(contract.task.deadline),
+      maxVerifySeconds: contract.task.max_verify_seconds,
       ...(this.d.stream
         ? { hooksFor: (n: number) => this.d.stream?.attempt(task.taskId, n) ?? {} }
         : {}),
@@ -467,6 +473,9 @@ export class WorkerNode {
       tokens_per_sec:
         a.generated.tokensPerSec === null ? null : Number(a.generated.tokensPerSec.toFixed(1)),
       self_check: a.check?.outcome ?? "not run",
+      started_at: a.started_at,
+      ended_at: a.ended_at,
+      reason: a.reason,
     }));
     if (sabotaged) task.sabotaged = true;
     task.state = "DELIVERED";
