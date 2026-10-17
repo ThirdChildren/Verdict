@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -65,7 +66,9 @@ function inSandbox(source: string): string {
   writeFileSync(join(inputs, "x.csv"), "a\n");
   const [cmd, args] = sandboxArgv(
     sandbox,
-    { delivery: d, inputs, scratch: join(scratch, "unused") },
+    // Same hiding as the real runner: on Linux the sandbox sees no host path at all, on macOS the package must be
+    // hidden explicitly, so the selftest exercises the same profile the verifier will use.
+    { delivery: d, inputs, scratch: join(scratch, "unused"), hide: [realpathSync(PKG)] },
     "csv2json.mjs",
     "x.csv",
     { cpuSeconds: 10, fsizeBytes: 1024 * 1024 },

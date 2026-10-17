@@ -56,7 +56,11 @@ describe("extractTarball limits (M2)", () => {
     writeFileSync(join(src, "csv2json.mjs"), "x");
     writeFileSync(join(src, "sub", "a.txt"), "y");
     const tgz = join(scratch, "ok.tgz");
-    spawnSync("tar", ["-czf", tgz, "-C", src, "."]);
+    // ustar and no AppleDouble metadata: macOS bsdtar would otherwise add pax headers and ._ files, which the
+    // extractor rejects by design (the worker tars on Linux with GNU tar).
+    spawnSync("tar", ["--format", "ustar", "-czf", tgz, "-C", src, "."], {
+      env: { ...process.env, COPYFILE_DISABLE: "1" },
+    });
     const d = dest();
     extractTarball(tgz, d);
     expect(existsSync(join(d, "csv2json.mjs"))).toBe(true);

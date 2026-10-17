@@ -163,6 +163,8 @@ interface Mounts {
   scratch: string;
   /** Host paths the delivery must never read (package, verifier data dir). Enforced on macOS; on Linux they are not mounted. */
   hide?: string[];
+  /** Directory holding the per-case output files whose fds the executor inherits (metadata-only read on macOS). */
+  outputs?: string;
 }
 
 /** argv that runs `node <entry> <input>` with stdout going to the inherited fd, inside the sandbox. */
@@ -238,14 +240,27 @@ export function sandboxArgv(
   }
   // macOS: Seatbelt profile. No network; writes only under scratch; reads are denied for the run's temp dir (which holds
   // the package copy with the expected files), the package, and the verifier's data dir, then re-allowed for the
-  // delivery, the inputs and scratch only (the last matching rule wins). [Not run on a Mac yet.]
+  // delivery, the inputs and scratch only (the last matching rule wins).
+  // Verified on macOS 26 (17 Oct 2026): Node must lstat every ancestor of its script (ESM realpath walk) and resolve
+  // its cwd, and it fstat()s its inherited stdout (the case output file) in PlatformInit, so the run dir and the output
+  // dir get a metadata-only allowance (stat, not listing nor contents). Without it every case dies at startup (getcwd
+  // EPERM or SIGABRT in node::InitializeOncePerProcess) and the judge fails all checks.
+  // Seatbelt matches resolved paths: a rule written with a symlinked path (/var -> /private/var on macOS) matches
+  // nothing and a deny would silently not apply. Every path is therefore emitted in both its given and resolved form.
   const q = (p: string): string => JSON.stringify(p);
-  const hidden = [dirname(m.delivery), ...(m.hide ?? [])];
-  const profile = `(version 1)(allow default)(deny network*)(deny file-write*)(allow file-write* (subpath ${q(m.scratch)})(literal "/dev/null"))(deny file-read* ${hidden
-    .map((p) => `(subpath ${q(p)})`)
-    .join(
-      "",
-    )})(allow file-read* (subpath ${q(m.delivery)})(subpath ${q(m.inputs)})(subpath ${q(m.scratch)}))`;
+  const runDir = dirname(m.delivery);
+  const sub = (paths: string[]): string =>
+    paths
+      .flatMap(realDirs)
+      .map((p) => `(subpath ${q(p)})`)
+      .join("");
+  const lit = (paths: string[]): string =>
+    paths
+      .flatMap(realDirs)
+      .map((p) => `(literal ${q(p)})`)
+      .join("");
+  const hidden = [runDir, ...(m.hide ?? [])];
+  const profile = `(version 1)(allow default)(deny network*)(deny file-write*)(allow file-write* ${sub([m.scratch])}(literal "/dev/null"))(deny file-read* ${sub(hidden)})(allow file-read-metadata ${lit([runDir])}${m.outputs ? sub([m.outputs]) : ""})(allow file-read* ${sub([m.delivery, m.inputs, m.scratch])})`;
   return [
     "sandbox-exec",
     [
@@ -501,6 +516,7 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
             delivery: del,
             inputs,
             scratch,
+            outputs: out,
             hide: [realpathSync(opts.packageDir), ...realDirs(resolveDataDir())],
           },
           manifest.entry,

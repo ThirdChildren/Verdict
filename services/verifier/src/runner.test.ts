@@ -138,6 +138,37 @@ net.connect(${port}, "127.0.0.1").on("connect", () => console.log("CONNECTED")).
     });
 
     it("sees no host paths and can write only to its scratch dir", () => {
+      if (process.platform === "darwin") {
+        // Seatbelt model: reads allowed by default except the hidden run dir (which holds the package copy with the
+        // expected answers), writes only under scratch. Host paths stay visible on macOS (documented limit).
+        writeFileSync(join(scratch, "secret.txt"), "expected answers live here");
+        mkdirSync(join(scratch, "unused"), { recursive: true });
+        const r = inSandbox(`import fs from "node:fs";
+import path from "node:path";
+const tryW = (p) => { try { fs.writeFileSync(p, "x"); return "wrote"; } catch (e) { return e.code; } };
+const tryR = (p) => { try { fs.readFileSync(p); return "read"; } catch (e) { return e.code; } };
+const tryLs = (p) => { try { fs.readdirSync(p); return "listed"; } catch (e) { return e.code; } };
+const delivery = path.dirname(process.argv[1]);
+const inputs = path.dirname(process.argv[2]);
+const runDir = path.dirname(delivery);
+console.log(JSON.stringify({
+  hiddenFile: tryR(path.join(runDir, "secret.txt")), hiddenList: tryLs(runDir),
+  delivery: tryW(path.join(delivery, "x")), inputs: tryW(path.join(inputs, "x")),
+  usr: tryW("/usr/x"), etc: tryW("/etc/x"), root: tryW("/x"),
+  scratch: tryW(path.join(runDir, "unused", "x")),
+}));`);
+        expect(JSON.parse(r.stdout)).toEqual({
+          hiddenFile: "EPERM",
+          hiddenList: "EPERM",
+          delivery: "EPERM",
+          inputs: "EPERM",
+          usr: "EPERM",
+          etc: "EPERM",
+          root: "EPERM",
+          scratch: "wrote",
+        });
+        return;
+      }
       const r = inSandbox(`import fs from "node:fs";
 const tryW = (p) => { try { fs.writeFileSync(p, "x"); return "wrote"; } catch (e) { return e.code; } };
 console.log(JSON.stringify({

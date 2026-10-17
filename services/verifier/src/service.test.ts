@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -117,9 +117,12 @@ async function deposit(
 
 function bundle(dir: string): { b64: string; sha: string } {
   const out = join(scratch, `b-${Math.random().toString(16).slice(2)}.tar.gz`);
-  const r = spawnSync("tar", ["-czf", out, "-C", dir, "."]);
+  // ustar without AppleDouble metadata so the bundle is the same on macOS (bsdtar) and Linux (GNU tar).
+  const r = spawnSync("tar", ["--format", "ustar", "-czf", out, "-C", dir, "."], {
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
   if (r.status !== 0) throw new Error("tar failed");
-  const b64 = spawnSync("base64", ["-w0", out], { encoding: "utf8", maxBuffer: 20e6 }).stdout;
+  const b64 = readFileSync(out).toString("base64");
   return { b64, sha: "" };
 }
 
