@@ -1,0 +1,4 @@
+packages: []
+allowBuilds:
+  "@utexo/rgb-lightning-node-nodejs": true
+  esbuild: true

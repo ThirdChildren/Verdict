@@ -1,0 +1,1 @@
+{"name":"spike-p0-3-hodl","private":true,"type":"module","dependencies":{"@utexo/wdk-rgb-lightning":"0.1.0-beta.15","@utexo/rgb-lightning-node-nodejs":"0.1.0-beta.16","tsx":"4.23.15"}}

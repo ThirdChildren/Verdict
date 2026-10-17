@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/http-local" },
+    { "path": "../../packages/identity" },
+    { "path": "../../packages/wallet" },
+    { "path": "../../packages/protocol" }
+  ]
+}

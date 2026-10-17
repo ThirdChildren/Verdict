@@ -1,0 +1,8 @@
+{
+  "name": "verdict-regtest-issuer",
+  "private": true,
+  "type": "module",
+  "description": "Setup-only tUSD issuer (rgb-lib wallet). NOT a workspace member, never imported by a service. Run under Node 22 (see .nvmrc).",
+  "engines": { "node": ">=22 <23" },
+  "dependencies": { "@utexo/rgb-sdk": "1.0.3" }
+}

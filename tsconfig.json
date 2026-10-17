@@ -3,7 +3,10 @@
   "references": [
     { "path": "packages/protocol" },
     { "path": "packages/identity" },
+    { "path": "packages/wallet" },
     { "path": "packages/http-local" },
-    { "path": "packages/mandate-guard" }
+    { "path": "packages/mandate-guard" },
+    { "path": "apps/wallet-daemon" },
+    { "path": "scripts" }
   ]
 }

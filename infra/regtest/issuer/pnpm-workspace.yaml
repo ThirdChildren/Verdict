@@ -1,0 +1,3 @@
+packages: []
+allowBuilds:
+  "@utexo/rgb-lib-linux-x64": true

@@ -1,0 +1,22 @@
+# Podman (rootless, via podman-docker) fix for the official RGB-Tools/rgb-lightning-node regtest compose.yaml.
+# Without it bitcoind dies with `Permission denied /srv/app/.bitcoin/regtest/wallets` (SELinux label + uid mapping).
+#
+# Usage (from the clone of RGB-Tools/rgb-lightning-node; do NOT use `./regtest.sh start`, it runs `rm -rf data*`):
+#   mkdir -p datacore dataindex dataesplora
+#   podman unshare chown -R 1000:1000 datacore dataindex dataesplora   # REQUIRED once per fresh data dir
+#   docker compose -f compose.yaml -f <path-to-this-file> up -d bitcoind
+#   (then: docker compose ... exec -u blits bitcoind bitcoin-cli -regtest createwallet miner;  ... -rpcwallet=miner -generate 103)
+#   docker compose -f compose.yaml -f <path-to-this-file> up -d
+# Always pass both -f flags on every later `docker compose` call (exec, logs, down).
+# Cleaning the data dirs needs `podman unshare rm -rf datacore dataindex dataesplora`.
+# Plain Docker does not need this file. Verified with docker compose 5.5.1 over podman.
+services:
+  bitcoind:
+    volumes:
+      - ./datacore:/srv/app/.bitcoin:z
+  electrs:
+    volumes:
+      - ./dataindex:/srv/app/db:z
+  esplora:
+    volumes:
+      - ./dataesplora:/data:z
