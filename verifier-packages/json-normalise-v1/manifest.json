@@ -1,0 +1,123 @@
+{
+  "format": 2,
+  "id": "json-normalise-v1",
+  "description": "Write a Node.js program (ES module, built-ins only) that reads one JSON file whose path is argv[2] and prints its canonical form to stdout. Canonical means: object keys sorted recursively in plain code-unit order (so \"B\" comes before \"a\"), arrays kept in input order, strings unchanged, numbers printed in plain decimal (no exponent, no trailing zeros, -0 printed as 0), 2-space indentation, and exactly one trailing newline.",
+  "profile": "standard",
+  "entry": "normalise.mjs",
+  "cases_dir": "cases",
+  "visible_dir": "visible",
+  "input_ext": ".json",
+  "expected_ext": ".expected.json",
+  "output_ext": ".out.json",
+  "case_timeout_seconds": 10,
+  "max_output_bytes": 1048576,
+  "judge_sha256": "5587078593b9ef1d31324cf9ac7e6295d168958c4629f3d08dfb896ad55d8933",
+  "checks": [
+    {
+      "id": "fixtures",
+      "kind": "fixtures",
+      "weight": 50,
+      "required": true,
+      "params": {
+        "whitespace": "trim-lines",
+        "compare": "text"
+      }
+    },
+    {
+      "id": "visible",
+      "kind": "fixtures",
+      "weight": 10,
+      "required": false,
+      "params": {
+        "cases_dir": "visible",
+        "whitespace": "trim-lines",
+        "compare": "text"
+      }
+    },
+    {
+      "id": "schema",
+      "kind": "schema",
+      "weight": 15,
+      "required": true,
+      "params": {
+        "file": "schema.json"
+      }
+    },
+    {
+      "id": "idempotent",
+      "kind": "property",
+      "weight": 10,
+      "required": false,
+      "params": {
+        "same_output": [["case-keys", "case-keys-shuffled"]]
+      }
+    },
+    {
+      "id": "static",
+      "kind": "static",
+      "weight": 0,
+      "required": true,
+      "params": {
+        "banned_imports": [
+          "net",
+          "http",
+          "https",
+          "http2",
+          "tls",
+          "dgram",
+          "dns",
+          "child_process",
+          "worker_threads",
+          "cluster"
+        ],
+        "banned_tokens": ["fetch", "import(", "XMLHttpRequest", "WebSocket", "eval"]
+      }
+    },
+    {
+      "id": "limits",
+      "kind": "limits",
+      "weight": 5,
+      "required": false,
+      "params": {
+        "max_source_bytes": 20000,
+        "max_lines": 300
+      }
+    },
+    {
+      "id": "spec",
+      "kind": "spec",
+      "weight": 10,
+      "required": true,
+      "params": {
+        "file": "spec/assertions.json"
+      }
+    }
+  ],
+  "profiles": {
+    "strict": {
+      "min_score": 95,
+      "required_overrides": {
+        "visible": true,
+        "idempotent": true
+      },
+      "tolerances": {},
+      "determinism": "full"
+    },
+    "standard": {
+      "min_score": 80,
+      "required_overrides": {},
+      "tolerances": {},
+      "determinism": "judge"
+    },
+    "lenient": {
+      "min_score": 60,
+      "required_overrides": {
+        "schema": false
+      },
+      "tolerances": {
+        "whitespace": "collapse"
+      },
+      "determinism": "judge"
+    }
+  }
+}
