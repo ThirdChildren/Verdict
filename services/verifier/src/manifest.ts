@@ -133,6 +133,18 @@ export function parseManifest(raw: unknown): ManifestParse {
         bad(`${at}.params`, "must be an object");
         continue;
       }
+      if (params.compare !== undefined) {
+        if (
+          (c.kind !== "fixtures" && c.kind !== "differential") ||
+          (params.compare !== "json" && params.compare !== "text")
+        )
+          bad(`${at}.params.compare`, 'must be "json" or "text" and only on fixtures/differential');
+        else if (
+          params.compare === "text" &&
+          ("key_order" in params || "numeric_tolerance" in params)
+        )
+          bad(`${at}.params`, 'key_order and numeric_tolerance do not apply to compare "text"');
+      }
       for (const key of ["file", "cases_dir"])
         if (params[key] !== undefined && !safeRel(params[key]))
           bad(`${at}.params.${key}`, "must be a safe relative path");

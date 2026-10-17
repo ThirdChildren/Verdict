@@ -88,6 +88,18 @@ function normText(s, whitespace) {
   return s;
 }
 
+/** Text mode: whitespace is significant except what the profile names. trim-lines: trailing blanks per line, one final newline. */
+function textNorm(s, whitespace) {
+  if (whitespace === "trim-lines")
+    return `${s
+      .split(/\r?\n/)
+      .map((l) => l.trimEnd())
+      .join("\n")
+      .replace(/\n+$/, "")}\n`;
+  if (whitespace === "collapse") return s.replace(/\s+/g, " ").trim();
+  return s;
+}
+
 function numEq(a, b, tol) {
   if (a === b) return true;
   const rel = tol?.rel ?? 0;
@@ -221,6 +233,16 @@ function manifestProblem() {
   for (const c of manifest.checks)
     if (!Number.isInteger(c.weight) || c.weight < 0 || c.weight > 1000)
       return `bad weight on ${c.id}`;
+  for (const c of manifest.checks) {
+    const pr = c.params ?? {};
+    if (
+      pr.compare !== undefined &&
+      (!["fixtures", "differential"].includes(c.kind) || !["json", "text"].includes(pr.compare))
+    )
+      return `check ${c.id}: bad compare`;
+    if (pr.compare === "text" && ("key_order" in pr || "numeric_tolerance" in pr))
+      return `check ${c.id}: key_order and numeric_tolerance do not apply to compare "text"`;
+  }
   for (const [name, p] of Object.entries(manifest.profiles)) {
     if (!Number.isInteger(p.min_score) || p.min_score < 1 || p.min_score > 100)
       return `profile ${name}: min_score must be an integer in [1, 100]`;
@@ -261,7 +283,10 @@ function fixturesPass(params) {
   return stems.every((s) => {
     const o = outputOf(dirName, s);
     const e = expectedOf(dirName, s);
-    return o.ok && e.ok && sameOutput(o.value, e.value, params);
+    if (!o.ok || !e.ok) return false;
+    if (params.compare === "text")
+      return textNorm(o.text, params.whitespace) === textNorm(e.text, params.whitespace);
+    return sameOutput(o.value, e.value, params);
   });
 }
 

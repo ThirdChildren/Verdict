@@ -158,6 +158,59 @@ describe("generic judge", () => {
     });
   });
 
+  describe("fixtures compare: text", () => {
+    const text =
+      (extra: object = {}) =>
+      (m: ManifestV2) => {
+        const c = m.checks[0];
+        if (c) c.params = { compare: "text", ...extra };
+      };
+    it("distinguishes 1e3 from 1000 and indent widths; json mode does not", () => {
+      const e3 = (_s: string, v: unknown) => pretty(v).replace(/\b2\b/, "2e0");
+      expect(status(judge({ render: e3, mutate: text() }), "fixtures")).toBe("fail");
+      expect(status(judge({ render: e3 }), "fixtures")).toBe("pass");
+      const four = (_s: string, v: unknown) => JSON.stringify(sortJson(v), null, 4);
+      expect(status(judge({ render: four, mutate: text() }), "fixtures")).toBe("fail");
+      expect(
+        status(judge({ render: four, mutate: text({ whitespace: "trim-lines" }) }), "fixtures"),
+      ).toBe("fail");
+      expect(status(judge({ render: four }), "fixtures")).toBe("pass");
+      expect(status(judge({ mutate: text() }), "fixtures")).toBe("pass");
+    });
+    it("trim-lines forgives trailing blanks and the final newline only; collapse forgives all", () => {
+      const trailing = (_s: string, v: unknown) => `${pretty(v).replace(/,\n/g, ",  \n")}\n\n`;
+      expect(status(judge({ render: trailing, mutate: text() }), "fixtures")).toBe("fail");
+      expect(
+        status(judge({ render: trailing, mutate: text({ whitespace: "trim-lines" }) }), "fixtures"),
+      ).toBe("pass");
+      const four = (_s: string, v: unknown) => JSON.stringify(sortJson(v), null, 4);
+      expect(
+        status(judge({ render: four, mutate: text({ whitespace: "collapse" }) }), "fixtures"),
+      ).toBe("pass");
+    });
+    it("rejects invalid combinations in the validator and the judge", () => {
+      const base = (params: Record<string, unknown>, kind = "fixtures") => {
+        const m = JSON.parse(JSON.stringify(baseManifest())) as ManifestV2;
+        const c = m.checks[0];
+        if (c) {
+          c.params = params;
+          c.kind = kind as never;
+        }
+        return m;
+      };
+      expect(parseManifest(base({ compare: "text", key_order: "insensitive" })).ok).toBe(false);
+      expect(parseManifest(base({ compare: "text", numeric_tolerance: { rel: 1 } })).ok).toBe(
+        false,
+      );
+      expect(parseManifest(base({ compare: "xml" })).ok).toBe(false);
+      expect(parseManifest(base({ compare: "text" }, "schema")).ok).toBe(false);
+      expect(parseManifest(base({ compare: "text" })).ok).toBe(true);
+      const r = judge({ mutate: text({ key_order: "insensitive" }) });
+      expect(r.code).toBe(1);
+      expect(r.verdict.status).toBe("fail");
+    });
+  });
+
   it("schema: validates every output against schema.json", () => {
     const r = judge({ render: (s, v) => (s === "b" ? "[1]" : pretty(v)) });
     expect(status(r, "schema")).toBe("fail");
