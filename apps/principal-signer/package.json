@@ -1,0 +1,19 @@
+{
+  "name": "@verdict/principal-signer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run --reporter=dot --root ../.. --config vitest.config.ts apps/principal-signer/src"
+  },
+  "dependencies": {
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.20",
+    "@verdict/protocol": "workspace:*",
+    "@verdict/wallet": "workspace:*",
+    "fastify": "5.12.5",
+    "@verdict/http-local": "workspace:*",
+    "@verdict/mandate-guard": "workspace:*"
+  }
+}

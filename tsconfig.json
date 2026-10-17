@@ -7,7 +7,9 @@
     { "path": "packages/http-local" },
     { "path": "packages/mandate-guard" },
     { "path": "apps/wallet-daemon" },
+    { "path": "apps/principal-signer" },
     { "path": "packages/llm" },
+    { "path": "services/capability-engine" },
     { "path": "scripts" }
   ]
 }
