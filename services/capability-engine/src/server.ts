@@ -24,6 +24,7 @@ import type { WalletPort } from "@verdict/wallet";
 import Fastify, { type FastifyInstance } from "fastify";
 import { type DemoRouteDeps, registerDemoToggleRoutes } from "./api/demo.js";
 import { registerEvidenceRoutes } from "./api/evidence.js";
+import { registerFundsRoutes } from "./api/funds.js";
 import { type EngineIdentities, registerMandateRoutes } from "./api/mandate.js";
 import { type HardLimits, hardLimits } from "./config.js";
 import { Escrow } from "./escrow.js";
@@ -63,6 +64,10 @@ export interface ServerOptions {
   verifierFetch?: typeof fetch;
   /** Requests per window allowed on /api/mandate (default 10 per minute). */
   mandateRateLimit?: { max: number; windowMs: number };
+  /** Base URL of the principal-signer for GET /api/principal (default http://127.0.0.1:$PRINCIPAL_SIGNER_PORT or 7403). */
+  signerUrl?: string;
+  /** Test seam: the fetch used to ask the principal-signer for its identity. */
+  signerFetch?: typeof fetch;
   /** Block height source for /api/chain and lock heights (bitcoind in main.ts; a stub in tests). */
   chainHeight?: () => Promise<number>;
   /** Lifetime of a per-task child capability (default 1 hour). */
@@ -121,6 +126,16 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       now,
       ...(opts.chainHeight ? { height: opts.chainHeight } : {}),
     });
+
+  registerFundsRoutes(app, {
+    ...(opts.ledger ? { ledger: opts.ledger } : {}),
+    ...(opts.wallet ? { wallet: opts.wallet } : {}),
+    ...(opts.assetId ? { assetId: opts.assetId } : {}),
+    precision,
+    ...(opts.identities ? { principalId: opts.identities.principal } : {}),
+    signerUrl: opts.signerUrl ?? `http://127.0.0.1:${process.env.PRINCIPAL_SIGNER_PORT ?? "7403"}`,
+    ...(opts.signerFetch ? { signerFetch: opts.signerFetch } : {}),
+  });
 
   registerDemoToggleRoutes(app, {
     enabled: opts.demo?.enabled === true && !!opts.ledger && !!opts.wallet && !!opts.chainHeight,
