@@ -25,7 +25,8 @@ import {
   unlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, isAbsolute, join } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveDataDir } from "@verdict/identity";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { MAX_DELIVERY_BYTES } from "./extract.js";
@@ -83,6 +84,9 @@ const MAX_STDOUT_BYTES = 64 * 1024;
 const LIMIT_AS_BYTES = 2 * 1024 ** 3;
 const LIMIT_EXTRA_TASKS = 128;
 const SCRATCH_BYTES = 8 * 1024 * 1024;
+/** The repository checkout (may hold a local .env): hidden from the delivery on macOS, where host paths are otherwise readable. */
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
 const SANDBOX_PROFILE_NET = "(version 1)(allow default)(deny network*)";
 
 function probe(cmd: string, args: string[]): boolean {
@@ -517,7 +521,11 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
             inputs,
             scratch,
             outputs: out,
-            hide: [realpathSync(opts.packageDir), ...realDirs(resolveDataDir())],
+            hide: [
+              realpathSync(opts.packageDir),
+              ...realDirs(resolveDataDir()),
+              ...realDirs(REPO_ROOT),
+            ],
           },
           manifest.entry,
           f,
