@@ -115,6 +115,9 @@ Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VE
 
 - `bf9b893` The verifier now runs on macOS: the Seatbelt sandbox profile grants Node the metadata it needs at startup (run dir, output dir) while keeping the expected answers unreadable, emits resolved paths (`/var` is a symlink), and the selftest hides the package exactly like the runner. 40/40 verifier tests and the selftest pass on a Mac.
 - `050860f` `.env.example` now lists the variables the services really read, with the real ports (signer 7403, worker 7405) and the LAN, demo and model switches; vitest ignores stale `dist/` output.
+- `4de913e` `fcf89fc` Demo UI redesigned to an industrial, old-school layout: one ink, one paper, one accent; no rounded corners, pills, icons or tinted status cards; grotesk plus monospace with tabular numerals; fonts no longer fetched from the network (the venue has none); header as a one-line budget ledger; the five escrow steps as ledger rows; refusals and outcomes as plain ruled blocks. Behaviour, shortcuts and copy unchanged.
+- `9f8facb` 54 protocol negative-vector tests: envelope mutation never verifies, signature encoding and malleability, dirhash edge cases, payee attenuation, amount rejection.
+- `abbfd82` README run steps with the real prerequisites (Node 24, corepack, frozen install) and the second-machine verifier.
 - `a6425ab` Repo-wide data-dir inventory test tolerates missing workspace folders during the layered build.
 
 ## What is mocked, simulated or hard-coded
