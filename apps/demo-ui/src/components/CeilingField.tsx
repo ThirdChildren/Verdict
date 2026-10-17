@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +25,10 @@ export function CeilingField(props: {
   const over = minor !== null && exceedsAvailable(minor, props.available, props.precision);
   const presets = presetsFor(props.perTask, props.precision);
   return (
-    <div className="grid gap-3 border-y border-rule py-3" data-testid="ceiling-field">
+    <div
+      className="grid gap-3 rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
+      data-testid="ceiling-field"
+    >
       <Label htmlFor={id} className="text-sm text-subtle uppercase">
         Spending ceiling (tUSD)
       </Label>
@@ -63,8 +67,8 @@ export function CeilingField(props: {
         ))}
       </div>
       {minor === null && (
-        <p role="alert" className="font-semibold">
-          <span aria-hidden>▲ </span>
+        <p role="alert" className="flex items-center gap-2 font-semibold text-bad">
+          <TriangleAlert aria-hidden className="size-4" />
           Enter an amount above zero with at most {props.precision} decimals.
         </p>
       )}

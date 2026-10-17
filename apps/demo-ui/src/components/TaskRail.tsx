@@ -8,20 +8,22 @@ import type { Live } from "./WorkerLane.js";
 function Row({ row, selected }: { row: RailRow; selected: boolean }) {
   const select = useStore((s) => s.select);
   return (
-    <li className="border-b border-rule-soft">
+    <li>
       <button
         type="button"
         onClick={() => select(row.key)}
         aria-current={selected ? "true" : undefined}
         title={row.label}
-        className={`grid min-h-16 w-full min-w-0 grid-cols-[3ch_minmax(0,1fr)] content-center items-baseline gap-x-2 gap-y-0.5 border-l-2 px-2 py-1.5 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
+        className={`grid min-h-16 w-full min-w-0 grid-cols-[3ch_minmax(0,1fr)] content-center items-baseline gap-x-2 gap-y-1 rounded-xl border px-3 py-2 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
       >
         <span className="font-mono text-sm text-subtle">#{row.n}</span>
         <span className="line-clamp-2 text-base leading-snug">{row.label}</span>
         <span className="col-start-2 flex flex-wrap items-baseline gap-x-3">
           <StatusChip chip={row.chip} />
           {row.amount && (
-            <span className="font-mono text-xs whitespace-nowrap">{row.amount} tUSD</span>
+            <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs whitespace-nowrap">
+              {row.amount} tUSD
+            </span>
           )}
           {row.retired && <span className="text-sm text-subtle">mandate retired</span>}
         </span>
@@ -68,7 +70,7 @@ export function TaskRail(props: {
               No tasks yet. Start one and it will appear here, newest on top.
             </p>
           ) : (
-            <ul className="grid grid-cols-[minmax(0,1fr)] border-t border-rule">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
               {rows.map((r) => (
                 <Row key={r.key} row={r} selected={r.key === selected} />
               ))}

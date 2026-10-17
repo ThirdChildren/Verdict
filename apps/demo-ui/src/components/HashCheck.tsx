@@ -1,4 +1,5 @@
 import { Hash, middle } from "./Hash.js";
+import { Mark } from "./Mark.js";
 
 /** Shows a hash next to a result recomputed in the browser: matches -> verified (blue), differs -> MISMATCH (amber). */
 export function HashCheck({
@@ -23,7 +24,7 @@ export function HashCheck({
   const ok = recomputed !== null && (matches ?? recomputed === shown);
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-rule-soft py-1.5 text-base">
-      <span aria-hidden>{ok || plain ? "■" : "▲"}</span>
+      <Mark kind={ok || plain ? "done" : "attention"} />
       <span className="text-sm font-semibold uppercase">{label}</span>
       <Hash value={shown} label={label} />
       {plain ? null : recomputed === null ? (

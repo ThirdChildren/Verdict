@@ -1,3 +1,4 @@
+import { Archive, TriangleAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { fromMinor, toMinor } from "../lib/money.js";
 import type { AppState, BudgetView } from "../store.js";
@@ -6,13 +7,13 @@ const SEGMENTS = [
   {
     key: "committed",
     label: "Paid",
-    bar: "bg-ink",
+    bar: "bg-signal",
     tip: "Paid: already sent to workers.",
   },
   {
     key: "reserved",
     label: "Locked",
-    bar: "bg-subtle",
+    bar: "bg-warn",
     tip: "Locked: held in escrow for work in progress; returns to you if the task fails.",
   },
   {
@@ -81,7 +82,7 @@ export function BudgetMeter({
         </p>
       </TooltipProvider>
       <div
-        className="mt-1 flex h-1 w-full overflow-hidden bg-rule-soft"
+        className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-rule-soft/70"
         role="img"
         aria-label={
           b
@@ -91,17 +92,22 @@ export function BudgetMeter({
       >
         {w &&
           SEGMENTS.filter((s) => s.key !== "remaining").map((s) => (
-            <div key={s.key} className={s.bar} style={{ width: `${w[s.key]}%` }} />
+            <div
+              key={s.key}
+              className={`${s.bar} transition-[width] duration-500 ease-out`}
+              style={{ width: `${w[s.key]}%` }}
+            />
           ))}
       </div>
       {frozenAt && (
         <p className="mt-1 font-mono text-xs uppercase">
-          <span aria-hidden>□ </span>At retirement {frozenAt}
+          <Archive aria-hidden className="mr-1 inline size-3.5" />
+          At retirement {frozenAt}
         </p>
       )}
       {!frozenAt && state.confirming.length > 0 && (
-        <p role="status" className="mt-1 text-sm font-semibold">
-          <span aria-hidden>▲ </span>
+        <p role="status" className="mt-1 text-sm font-semibold text-warn">
+          <TriangleAlert aria-hidden className="mr-1 inline size-4 align-[-0.15em]" />
           Payment being confirmed: the amount stays held until the wallet reports.
         </p>
       )}

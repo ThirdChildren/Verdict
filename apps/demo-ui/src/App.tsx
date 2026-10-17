@@ -1,3 +1,4 @@
+import { WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Sheet,
@@ -173,7 +174,10 @@ export function App() {
       <FundsPanel />
       <div className="flex min-h-0 flex-1">
         {state.root && (
-          <aside aria-label="Tasks" className="w-80 shrink-0 border-r border-rule p-3">
+          <aside
+            aria-label="Tasks"
+            className="w-80 shrink-0 border-r border-rule-soft bg-card/40 p-3 backdrop-blur-sm"
+          >
             <TaskRail
               state={state}
               descriptions={descriptions}
@@ -188,16 +192,25 @@ export function App() {
         >
           {blockNotice && !onBlockRow && <BlockNotice onDismiss={() => setBlockNotice(false)} />}
           {down && (
-            <div role="alert" className="border-y-2 border-ink p-4">
-              <p className="text-lg font-semibold">Engine disconnected</p>
-              <p>
-                Nothing on this screen is live until it reconnects. No funds can move while it is
-                down.
-              </p>
+            <div
+              role="alert"
+              className="animate-soft-in flex items-start gap-3 rounded-2xl border border-bad/40 bg-bad/8 p-4 shadow-soft"
+            >
+              <WifiOff aria-hidden className="mt-0.5 size-5 shrink-0 text-bad" />
+              <div>
+                <p className="text-lg font-semibold">Engine disconnected</p>
+                <p>
+                  Nothing on this screen is live until it reconnects. No funds can move while it is
+                  down.
+                </p>
+              </div>
             </div>
           )}
           {state.root ? (
-            <div key={state.selected ?? "none"}>
+            <div
+              key={state.selected ?? "none"}
+              className="animate-soft-in rounded-3xl border border-rule-soft bg-card/80 p-6 shadow-soft"
+            >
               <Stage state={state} live={live} descriptions={descriptions} />
             </div>
           ) : (
@@ -207,7 +220,7 @@ export function App() {
         {inspector && wide && (
           <aside
             aria-label="Details"
-            className="w-[21.5rem] shrink-0 overflow-auto border-l border-rule p-4"
+            className="w-[21.5rem] shrink-0 overflow-auto border-l border-rule-soft bg-card/40 p-4"
           >
             <Inspector mock={mock} />
           </aside>

@@ -31,6 +31,7 @@ import { useScoped } from "../lib/scope.js";
 import { workLog } from "../lib/workLog.js";
 import { type AppState, useStore } from "../store.js";
 import { Hash, middle } from "./Hash.js";
+import { Mark } from "./Mark.js";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 const NOT_YET = "not reported yet";
@@ -349,7 +350,7 @@ function Verifier(props: { sel: Sel; data: AgentsData; s: AppState }) {
               <ul className="font-mono text-sm">
                 {record.checks.map((c) => (
                   <li key={c.id}>
-                    <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
+                    <Mark kind={c.status === "PASS" ? "done" : "fail"} className="mr-1" />
                     {c.id}: {c.status}
                   </li>
                 ))}

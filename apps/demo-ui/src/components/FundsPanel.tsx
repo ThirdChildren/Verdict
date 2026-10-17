@@ -1,15 +1,24 @@
+import { ArrowUpRight, Lock, TriangleAlert, Wallet } from "lucide-react";
+import type { ReactNode } from "react";
 import { WordButton } from "@/components/ui/word-button";
 import { connectPrincipal } from "../lib/principal.js";
 import { useFunds } from "../lib/queries.js";
 import { useStore } from "../store.js";
 
-function Figure(props: { label: string; value: string | null; bold?: boolean }) {
+function Figure(props: { icon: ReactNode; label: string; value: string | null; strong?: boolean }) {
   return (
-    <div className="flex items-baseline gap-2">
-      <dt className="text-sm text-subtle uppercase">{props.label}</dt>
-      <dd className={`font-mono text-lg ${props.bold ? "font-semibold" : ""}`}>
-        {props.value ?? "…"}
-      </dd>
+    <div
+      className={`flex items-center gap-3 rounded-xl border px-3.5 py-2 shadow-soft transition ${props.strong ? "border-signal/40 bg-card ring-2 ring-signal/10" : "border-rule-soft bg-card/70"}`}
+    >
+      <span className="grid size-8 place-items-center rounded-lg bg-surface text-subtle [&_svg]:size-4">
+        {props.icon}
+      </span>
+      <div className="grid leading-tight">
+        <dt className="text-xs text-subtle uppercase">{props.label}</dt>
+        <dd className={`font-mono text-lg ${props.strong ? "font-semibold" : ""}`}>
+          {props.value ?? "…"}
+        </dd>
+      </div>
     </div>
   );
 }
@@ -26,12 +35,10 @@ export function FundsPanel() {
     return (
       <div
         role="alert"
-        className="flex flex-wrap items-baseline gap-x-4 border-b-2 border-ink px-6 py-2"
+        className="animate-soft-in mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-bad/40 bg-bad/8 px-4 py-2.5 min-[1440px]:mx-6"
       >
-        <p className="font-semibold">
-          <span aria-hidden>▲ </span>
-          {principal.message}
-        </p>
+        <TriangleAlert aria-hidden className="size-5 text-bad" />
+        <p className="font-semibold">{principal.message}</p>
         <p className="text-subtle">Nothing was signed and no funds moved.</p>
         <WordButton onClick={() => void connectPrincipal()}>Retry</WordButton>
       </div>
@@ -40,22 +47,33 @@ export function FundsPanel() {
   return (
     <section
       aria-label="Funds"
-      className="flex flex-wrap items-baseline gap-x-8 gap-y-1 border-b border-rule px-6 py-2"
+      className="animate-soft-in flex flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-3 min-[1440px]:px-6"
     >
-      <h2 className="text-sm text-subtle uppercase">Regtest test asset (tUSD)</h2>
+      <h2 className="text-xs font-semibold tracking-wide text-subtle uppercase">
+        Regtest test asset (tUSD)
+      </h2>
       {funds.isError ? (
-        <p role="status" className="font-semibold">
-          <span aria-hidden>▲ </span>
+        <p role="status" className="flex items-center gap-2 font-semibold text-warn">
+          <TriangleAlert aria-hidden className="size-4" />
           {funds.error instanceof Error ? funds.error.message : "The funds are unknown right now."}
         </p>
       ) : (
-        <dl className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
-          <Figure label="Spendable in channel" value={funds.data?.spendable ?? null} />
-          <Figure label="Reserved by open tasks" value={funds.data?.reserved ?? null} />
+        <dl className="flex flex-wrap items-center gap-3">
           <Figure
+            icon={<Wallet aria-hidden />}
+            label="Spendable in channel"
+            value={funds.data?.spendable ?? null}
+          />
+          <Figure
+            icon={<Lock aria-hidden />}
+            label="Reserved by open tasks"
+            value={funds.data?.reserved ?? null}
+          />
+          <Figure
+            icon={<ArrowUpRight aria-hidden />}
             label="Available to delegate"
             value={funds.data?.available_to_delegate ?? null}
-            bold
+            strong
           />
         </dl>
       )}

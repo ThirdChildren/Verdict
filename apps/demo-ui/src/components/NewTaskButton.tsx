@@ -25,6 +25,7 @@ import {
   defaultTaskAmount,
 } from "../lib/taskText.js";
 import { useStore } from "../store.js";
+import { Mark } from "./Mark.js";
 
 /** Why a new task cannot start, or null when it can. */
 export function newTaskBlocker(
@@ -138,7 +139,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       </p>
       {sent && (
         <p role="status" className="mt-1 text-sm font-semibold">
-          <span aria-hidden>■ </span>
+          <Mark kind="done" className="mr-1" />
           {sent}
         </p>
       )}
@@ -197,7 +198,10 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
               The agent will be told: "{composeTaskGoal(amount, worker, description)}"
             </p>
             {failure && (
-              <p role="alert" className="border-l-2 border-ink pl-4 font-semibold">
+              <p
+                role="alert"
+                className="rounded-xl border border-rule-soft border-l-4 border-l-bad bg-surface/60 px-4 py-2 font-semibold"
+              >
                 {failure}
               </p>
             )}

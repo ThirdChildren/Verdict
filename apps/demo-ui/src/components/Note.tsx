@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** In-place notice: plain text with a 2px ink rule and a bold first line. Replaces toasts and tinted alerts. */
+/** In-place notice: a soft card with an ink accent on the left and a bold first line. Replaces toasts and tinted alerts. */
 export function Note(props: {
   title?: string;
   role?: "alert" | "status";
@@ -10,7 +10,7 @@ export function Note(props: {
   return (
     <div
       role={props.role ?? "status"}
-      className={`grid gap-1 border-l-2 border-ink py-1 pl-4 ${props.className ?? ""}`}
+      className={`animate-soft-in grid gap-1 rounded-xl border border-rule-soft border-l-4 border-l-ink bg-surface/60 px-4 py-3 ${props.className ?? ""}`}
     >
       {props.title && <p className="text-xl font-semibold">{props.title}</p>}
       {props.children}

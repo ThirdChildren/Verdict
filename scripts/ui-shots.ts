@@ -129,6 +129,13 @@ const EXTRAS: Extra[] = [
       await p.getByRole("textbox", { name: /spending ceiling/i }).fill("80");
     },
   },
+  {
+    id: "more-menu",
+    scene: "authorized",
+    act: async (p) => {
+      await p.getByRole("button", { name: "More" }).click();
+    },
+  },
   { id: "wizard-signed", scene: "empty", act: (p) => wizard(p, EXAMPLE, 2) },
   // Mandate history: select the retired mandate (frozen figures, read-only NEW TASK).
   {

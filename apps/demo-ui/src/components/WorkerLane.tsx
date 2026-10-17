@@ -169,7 +169,10 @@ export function WorkerLane() {
   const live = useLiveStream();
   const last = task?.attempts?.[task.attempts.length - 1];
   return (
-    <section aria-label="Worker" className="border-y-2 border-ink py-3">
+    <section
+      aria-label="Worker"
+      className="rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
+    >
       <h2 className="text-xl font-semibold">Worker</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
@@ -201,7 +204,10 @@ export function WorkerLane() {
         </p>
       )}
       {live && (
-        <section className="mt-3 border border-rule p-3" aria-label="Live model output">
+        <section
+          className="mt-3 rounded-xl border border-rule-soft bg-surface/50 p-3"
+          aria-label="Live model output"
+        >
           <p className="font-mono text-base font-semibold">
             Attempt {live.attempt}: {live.done ? "finished" : "writing"} · {live.tokens} tokens
             {live.tps !== null ? ` · ${live.tps} tokens/s` : ""}

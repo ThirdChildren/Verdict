@@ -10,6 +10,7 @@ import { isMock } from "../lib/mode.js";
 import { useAttack } from "../lib/queries.js";
 import { fetchWorkerConfig, setWorkerConfig, type WorkerConfig } from "../lib/workerApi.js";
 import { type AppState, useStore } from "../store.js";
+import { Mark } from "./Mark.js";
 
 /** The switches as the worker really has them (polled). In ?mock=1 they are local and canned. */
 function useWorkerSwitches() {
@@ -67,7 +68,8 @@ function Switches() {
       )}
       {w.failed && (
         <p role="alert" className="text-sm font-semibold">
-          <span aria-hidden>▲ </span>The worker did not accept the change.
+          <Mark kind="attention" className="mr-1" />
+          The worker did not accept the change.
         </p>
       )}
       {rows.map((r) => {
@@ -210,7 +212,10 @@ function Mine() {
 export function DemoConsole(props: { open: boolean; onClose: () => void }) {
   if (!props.open) return null;
   return (
-    <aside aria-label="Demo console" className="shrink-0 border-t-2 border-ink bg-paper px-8 py-2">
+    <aside
+      aria-label="Demo console"
+      className="shrink-0 rounded-t-2xl border-t border-rule-soft bg-card px-8 py-2 shadow-lift"
+    >
       <div className="mb-1 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Demo console</h2>
         <WordButton onClick={props.onClose}>

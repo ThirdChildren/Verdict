@@ -15,6 +15,7 @@ import { useStore } from "../store.js";
 import { BlockCard } from "./BlockCard.js";
 import { CeilingField } from "./CeilingField.js";
 import { Hash } from "./Hash.js";
+import { Mark } from "./Mark.js";
 import { Note } from "./Note.js";
 
 export const goalSchema = z.object({
@@ -87,7 +88,7 @@ function WriteStep(props: { onProposed: (goal: string, data: GoalResponse) => vo
       />
       {err && (
         <p role="alert" className="font-semibold">
-          <span aria-hidden>▲ </span>
+          <Mark kind="attention" className="mr-1" />
           {err.message}
         </p>
       )}
@@ -213,7 +214,7 @@ function ReviewStep(props: {
         perTask={proposal.mandate.max_per_task}
         available={connected ? (funds.data?.available_to_delegate ?? null) : null}
       />
-      <dl className="grid grid-cols-2 border-y border-rule [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
+      <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-rule-soft bg-card shadow-soft [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
         <Fact
           label="Spending ceiling"
           big={`${m.max_total} tUSD`}
@@ -256,7 +257,7 @@ function ReviewStep(props: {
       )}
       <details>
         <summary className="cursor-pointer text-base">Raw mandate (JSON)</summary>
-        <pre className="mt-2 max-h-56 overflow-auto border border-rule p-3 font-mono text-sm">
+        <pre className="mt-2 max-h-56 overflow-auto rounded-lg border border-rule-soft bg-surface/50 p-3 font-mono text-sm">
           {JSON.stringify(m, null, 2)}
         </pre>
       </details>
@@ -289,7 +290,7 @@ function ReviewStep(props: {
             </Note>
           ))}
       </div>
-      <div className="sticky bottom-0 -mb-6 flex gap-3 border-t border-rule bg-paper py-4">
+      <div className="sticky bottom-0 -mb-6 flex gap-3 border-t border-rule-soft bg-card/95 py-4 backdrop-blur">
         <Button type="button" variant="outline" onClick={props.onBack}>
           Back
         </Button>

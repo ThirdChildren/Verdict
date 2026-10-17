@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchVerifierTasks, type VerifierTaskView } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
 import { Hash } from "./Hash.js";
+import { Mark } from "./Mark.js";
 
 const REASON: Record<string, string> = {
   VERIFY_TIMEOUT: "The check ran out of time, so the delivery counts as failed.",
@@ -40,14 +41,17 @@ export function VerifierLane() {
   const report = task?.reports[task.reports.length - 1];
   const pass = report?.outcome === "PASS";
   return (
-    <section aria-label="Verifier" className="border-y-2 border-ink py-3">
+    <section
+      aria-label="Verifier"
+      className="rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
+    >
       <h2 className="text-xl font-semibold">Verifier</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
         {task && !report && "Holding the release secret. Waiting for the worker's delivery."}
         {report && (
           <span className="block text-2xl font-semibold">
-            <span aria-hidden>■ </span>
+            <Mark kind="done" className="mr-1" />
             {pass
               ? "PASS: the delivery passed every check. The secret was released to the worker."
               : "FAIL: the delivery was rejected. The secret stays locked."}
@@ -70,7 +74,7 @@ export function VerifierLane() {
                 <ul className="font-mono text-sm">
                   {report.record.checks.map((c) => (
                     <li key={c.id}>
-                      <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
+                      <Mark kind={c.status === "PASS" ? "done" : "fail"} className="mr-1" />
                       {c.id}: {c.status === "PASS" ? "passed" : "failed"}
                     </li>
                   ))}
@@ -98,7 +102,7 @@ export function VerifierLane() {
               <Hash value={report.record.verifier_sig} label="verdict signature" />
             </dd>
           </dl>
-          <pre className="mt-3 max-h-40 overflow-auto border border-rule p-3 font-mono text-sm">
+          <pre className="mt-3 max-h-40 overflow-auto rounded-lg border border-rule-soft bg-surface/50 p-3 font-mono text-sm">
             {report.log_tail.join("\n")}
           </pre>
         </>
