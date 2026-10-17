@@ -11,3 +11,10 @@ Found in the read-only security reviews of the funds path and judged Low. Say th
 Not covered by that review: `escrow.ts` HTLC and invoice-match checks, the sandbox runner, protocol signing and domain separation, `wallet-client.ts` internals, the UI, dependencies, `selftest.ts`.
 6. **macOS verifier: host files are readable by the delivery.** The Seatbelt profile is `allow default` with explicit denies: the run dir (package copy with the expected answers), the verifier package, the data dir and the repository checkout are hidden, writes are confined to scratch and the network is blocked, but any other file on the Mac (home, `/etc`) can be read by a hostile delivery. It cannot exfiltrate over the network. The Linux sandbox (bwrap) shows no host path at all. Found and documented on 17 Oct 2026 when the verifier first ran on a Mac.
 7. **macOS: fork-bomb and allocation tests are timing-sensitive under load.** `runner.test.ts` passed 40/40 in isolation but one of four runs failed while other processes were busy. `pnpm verifier:selftest` covers both cases and is the check that matters before a demo.
+
+## Deferred protocol changes (the protocol is frozen; each needs a version bump and an ADR)
+
+- A dedicated block code `CHILD_OUTLIVES_PARENT`: today a child capability that expires after its parent is refused as `PARENT_MISMATCH` with a detail sentence.
+- A shared schema for the refusal body of `POST /v0/messages` (`{ ok: false, code, message }`), which each service currently types locally.
+- Whether `SPEND_INTENT` should become a signed envelope type in the protocol catalogue; today the engine accepts it on a loopback-only route with the buyer's identity signature.
+- Rejecting lone surrogates in `dirHash` paths (currently accepted and pinned by `packages/protocol/src/negative-vectors.test.ts`).

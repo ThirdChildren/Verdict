@@ -137,4 +137,4 @@ Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VE
 
 ## Honesty and safety
 
-No secrets in this repository: seeds and keys live in `~/.verdict-data`, ignored by git. Known limits are stated in `docs/LIMITS.md`. If something on stage is a recording, we say so.
+No secrets in this repository: seeds and keys live in `~/.verdict-data`, ignored by git. Known limits are stated in `docs/LIMITS.md`; questions a reviewer may ask, with evidence, in `docs/FAQ.md`. If something on stage is a recording, we say so.
