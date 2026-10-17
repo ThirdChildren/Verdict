@@ -1,5 +1,5 @@
 import { WordButton } from "@/components/ui/word-button";
-import { connectPrincipal, principalChip } from "../lib/principal.js";
+import { connectPrincipal, principalChip, shortPrincipal } from "../lib/principal.js";
 import { useStore } from "../store.js";
 
 /** Header control: "Connect principal" until connected, then a chip with the principal's public id. */
@@ -12,7 +12,8 @@ export function PrincipalChip() {
         title={`${p.id}\nThe key is held by the principal-signer process, not by this screen.`}
       >
         <span aria-hidden>■ </span>
-        {principalChip(p.id)}
+        <span className="hidden min-[1440px]:inline">{principalChip(p.id)}</span>
+        <span className="min-[1440px]:hidden">{shortPrincipal(p.id)}</span>
       </span>
     );
   if (p.status === "error")
