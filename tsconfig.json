@@ -1,4 +1,9 @@
 {
   "files": [],
-  "references": [{ "path": "packages/protocol" }]
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/identity" },
+    { "path": "packages/http-local" },
+    { "path": "packages/mandate-guard" }
+  ]
 }
