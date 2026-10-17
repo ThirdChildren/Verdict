@@ -1,0 +1,11 @@
+# Known limits (accepted, from the P3.7 security gate)
+
+Found by `security-reviewer` on 2026-10-11 and judged Low. Say them honestly if asked.
+
+1. **PREIMAGE travels in plaintext HTTP on the LAN** (`services/capability-engine` to `peers.worker`). It is signed and bound to the payment hash, and only the payee node can claim, so a leaked P cannot be used to steal funds. But a changed `peers.json` or `WORKER_URL` would send P to the wrong host. Plan A (single Legion) uses loopback. Later fix: sealed box to the worker's key, or take the worker URL from the signed contract.
+2. **Peers are not allow-listed.** `VERIFIER_URL` / `WORKER_URL` / `ENGINE_URL` override `peers.json`, and LAN peers are plain http. Mitigation: keep `peers.json` at 0600 and check the resolved peers at startup.
+3. **`claimHodlInvoice` in the wallet adapter does not check sha256(P) == H itself.** The worker node does before it calls the adapter, so no current caller is exposed. Later fix: check in the adapter too.
+4. **Wallet daemon has no authentication beyond loopback and Host checks.** Any local process of the same user can call `POST /payments`. Accepted by design for the demo machine.
+5. **macOS verifier sandbox has no memory cap** (see `docs/MAC_VERIFIER.md`).
+
+Not reviewed in the P3.7 gate: `escrow.ts` HTLC and invoice-match checks, the sandbox runner, protocol signing and domain separation, `wallet-client.ts` internals, the UI, dependencies, `selftest.ts`.
