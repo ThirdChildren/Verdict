@@ -29,6 +29,7 @@ import { clockHms } from "./lib/mandates.js";
 import { isMock } from "./lib/mode.js";
 import { isFreshBlock, shouldToastBlock } from "./lib/notify.js";
 import { usePresenter } from "./lib/presenter.js";
+import { connectPrincipal, wasConnected } from "./lib/principal.js";
 import { useDemoToggles, useDescriptions } from "./lib/queries.js";
 import { isFrozen, useScoped } from "./lib/scope.js";
 import { useMedia } from "./lib/useMedia.js";
@@ -80,6 +81,10 @@ export function App() {
     setMockHistory(scene.history ?? null);
     void hydrateFromApi();
   }, [attempt, sceneId]);
+  // A principal connected earlier in this browser session is connected again after a reload.
+  useEffect(() => {
+    if (wasConnected()) void connectPrincipal();
+  }, []);
   const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
   const descriptions = useDescriptions();
   const [newTaskSignal, setNewTaskSignal] = useState(0);

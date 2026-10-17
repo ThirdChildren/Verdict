@@ -4,6 +4,7 @@ import {
   ApiError,
   type Chain,
   type Evidence,
+  type Funds,
   type GoalResponse,
   type SignedMandate,
   type TaskList,
@@ -253,4 +254,11 @@ function applyMockRefund(taskId: string): void {
         },
       }),
     );
+}
+
+export async function fetchPrincipal(): Promise<{ id: string }> {
+  return { id: MOCK_ROOT.issuer };
+}
+export async function fetchFunds(): Promise<Funds> {
+  return { spendable: "50.00", reserved: "1.20", available_to_delegate: "48.80" };
 }

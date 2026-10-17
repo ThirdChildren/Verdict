@@ -3,6 +3,7 @@ import { WordButton } from "@/components/ui/word-button";
 import type { AppState } from "../store.js";
 import { BudgetMeter } from "./BudgetMeter.js";
 import { MandatePill } from "./MandatePill.js";
+import { PrincipalChip } from "./PrincipalChip.js";
 import { ServicesPill } from "./ServicesPill.js";
 import { useTheme } from "./ThemeProvider.js";
 
@@ -55,6 +56,7 @@ export function TopBar(props: {
           New mandate
         </WordButton>
       )}
+      <PrincipalChip />
       <ServicesPill state={props.state} onReconnect={props.onReconnect} />
       <nav
         aria-label="View"

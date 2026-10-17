@@ -66,6 +66,13 @@ export interface Retirement extends MandateRetired {
   afterSeq: number;
   receivedAt: string;
 }
+/** The principal as the console knows it. Kept for the session: a reset of the event stream does not disconnect it. */
+export type PrincipalState =
+  | { status: "disconnected" }
+  | { status: "connecting" }
+  | { status: "connected"; id: string }
+  | { status: "error"; message: string };
+
 export interface AppState {
   /** Budget of the ROOT mandate: covers all tasks. */
   budget: BudgetView | null;
@@ -106,6 +113,7 @@ export interface AppState {
   taskRoots: Record<string, string>;
   /** Child capability id -> parent root hash (from CAP_CHILD). */
   capParents: Record<string, string>;
+  principal: PrincipalState;
 }
 
 export const initialState: AppState = {
@@ -135,6 +143,7 @@ export const initialState: AppState = {
   rootHash: null,
   taskRoots: {},
   capParents: {},
+  principal: { status: "disconnected" },
 };
 
 const lazyRow = (hash: string, order: number): MandateRow => ({
@@ -369,6 +378,7 @@ interface Actions {
   /** Rebuilds the mandate map and the task -> mandate links from the API (newest mandate first). */
   hydrate: (rows: MandateRow[], taskRoots: Record<string, string>) => void;
   selectMandate: (hash: string) => void;
+  setPrincipal: (p: PrincipalState) => void;
   reset: () => void;
 }
 export const useStore = create<AppState & Actions>((set) => ({
@@ -422,5 +432,6 @@ export const useStore = create<AppState & Actions>((set) => ({
       const top = railRows({ ...s, ...lists })[0]?.key ?? null;
       return { selectedMandate: hash, selected: top };
     }),
-  reset: () => set({ ...initialState }),
+  setPrincipal: (principal) => set({ principal }),
+  reset: () => set((s) => ({ ...initialState, principal: s.principal })),
 }));
