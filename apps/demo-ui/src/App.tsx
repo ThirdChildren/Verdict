@@ -121,7 +121,7 @@ export function App() {
       />
       <div className="flex min-h-0 flex-1">
         {state.root && (
-          <aside aria-label="Tasks" className="w-64 shrink-0 border-r border-rule p-4">
+          <aside aria-label="Tasks" className="w-80 shrink-0 border-r border-rule p-3">
             <TaskRail
               state={state}
               descriptions={descriptions}

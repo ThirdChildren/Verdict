@@ -89,7 +89,7 @@ function WriteStep(props: { onProposed: (goal: string, data: GoalResponse) => vo
         rows={4}
         aria-invalid={err !== undefined}
         placeholder="Say it in your own words, with an amount and a time limit."
-        className="w-full resize-none rounded-lg border border-input bg-background p-4 text-xl outline-none focus-visible:ring-[4px] focus-visible:ring-ring/40"
+        className="w-full resize-none rounded-lg border border-input bg-background p-4 text-xl outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ink"
         {...form.register("goal")}
       />
       {err && (
@@ -337,7 +337,7 @@ export function MandateWizard(props: { open: boolean; onOpenChange: (open: boole
   };
   return (
     <Dialog open={props.open} onOpenChange={close}>
-      <DialogContent className="h-screen max-h-screen w-screen max-w-none content-start gap-6 overflow-auto rounded-none p-8 sm:max-w-none">
+      <DialogContent className="h-screen max-h-screen content-start gap-6 overflow-auto p-8 sm:max-w-3xl">
         <div className="mx-auto grid w-full max-w-3xl gap-4">
           <header className="grid gap-3">
             <DialogTitle className="font-display text-4xl font-semibold">

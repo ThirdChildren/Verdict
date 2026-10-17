@@ -33,7 +33,7 @@ export function ServicesPill(props: { state: AppState; onReconnect: () => void }
             <button
               type="button"
               aria-label={`Services ${up} of ${SERVICES.length} connected`}
-              className={`cursor-pointer whitespace-nowrap uppercase outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "font-semibold" : ""}`}
+              className={`cursor-pointer whitespace-nowrap uppercase outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "font-semibold" : ""}`}
             >
               <span aria-hidden>{glyph} </span>
               <span>

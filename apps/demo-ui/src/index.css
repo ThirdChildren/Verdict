@@ -53,7 +53,7 @@
   --color-destructive: var(--ink);
   --color-border: var(--rule-soft);
   --color-input: var(--rule);
-  --color-ring: var(--signal);
+  --color-ring: var(--ink);
   /* Transitional, monochrome: components not yet migrated (E12b/E12c) still reference these. Delete with them. */
   --color-info: var(--signal);
   --color-info-soft: var(--surface);
@@ -135,7 +135,7 @@ pre,
   font-family: var(--font-mono);
 }
 :focus-visible {
-  outline: 3px solid var(--signal);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 

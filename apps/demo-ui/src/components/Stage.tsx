@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { HELD_CAPTION, STOPPED_CAPTION, TASK_CAPTIONS } from "../lib/captions.js";
 import { currentMachines } from "../lib/machines.js";
@@ -84,10 +83,10 @@ function TaskStage(props: {
   const verdict = [...state.verdicts].reverse().find((v) => v.task_id === id) ?? null;
   const liveHere = props.live?.key.startsWith(`${id}:`) ? props.live : null;
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
       <header className="grid gap-1">
         <p className="text-base text-muted-foreground">Task #{n}</p>
-        <h2 className="font-display text-2xl font-bold">{taskLabel(id, props.descriptions)}</h2>
+        <h2 className="text-xl font-semibold">{taskLabel(id, props.descriptions)}</h2>
         <p className="text-base text-muted-foreground">
           <span className="tabular-nums text-foreground">{task.amount ?? "—"} tUSD</span> to{" "}
           {worker}
@@ -98,34 +97,26 @@ function TaskStage(props: {
         <p aria-live="polite" className={task.state === "CLAIMED" ? "sr-only" : "text-xl"}>
           {stopped ? STOPPED_CAPTION : held ? HELD_CAPTION : TASK_CAPTIONS[task.state]}
         </p>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={shown}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            {shown === 2 && <WorkPanel live={liveHere} attempt={task.attempt} stopped={stopped} />}
-            {shown === 3 && <VerifyPanel taskId={id} verdict={verdict} skipped={stopped} />}
-            {shown === 4 && (
-              <SettlePanel
-                taskId={id}
-                task={task}
-                chain={chain}
-                worker={worker}
-                verifiedPass={verdict?.verdict === "RELEASE"}
-                verifiedFail={verdict?.verdict === "WITHHOLD"}
-                held={held}
-              />
-            )}
-            {shown < 2 && (
-              <p className="text-base text-muted-foreground">
-                {steps[shown]?.machine}: this step is handled automatically.
-              </p>
-            )}
-          </motion.div>
-        </AnimatePresence>
+        <div key={shown}>
+          {shown === 2 && <WorkPanel live={liveHere} attempt={task.attempt} stopped={stopped} />}
+          {shown === 3 && <VerifyPanel taskId={id} verdict={verdict} skipped={stopped} />}
+          {shown === 4 && (
+            <SettlePanel
+              taskId={id}
+              task={task}
+              chain={chain}
+              worker={worker}
+              verifiedPass={verdict?.verdict === "RELEASE"}
+              verifiedFail={verdict?.verdict === "WITHHOLD"}
+              held={held}
+            />
+          )}
+          {shown < 2 && (
+            <p className="text-base text-muted-foreground">
+              {steps[shown]?.machine}: this step is handled automatically.
+            </p>
+          )}
+        </div>
       </section>
     </div>
   );

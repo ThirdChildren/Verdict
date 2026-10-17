@@ -43,27 +43,27 @@ export function BudgetMeter({ state }: { state: AppState }) {
   }
   const w = b ? segmentWidths(b, state.precision) : null;
   return (
-    <section aria-label="Budget" className="min-w-fit flex-1">
+    <section aria-label="Budget" className="min-w-0 shrink-0">
       <TooltipProvider>
         <p
-          className="flex flex-wrap items-baseline gap-x-2 font-mono text-base whitespace-nowrap uppercase"
+          className="flex items-baseline gap-x-1.5 font-mono text-sm whitespace-nowrap uppercase"
           aria-live="polite"
         >
           {SEGMENTS.map((s, i) => (
-            <span key={s.key} className="flex items-baseline gap-x-2">
+            <span key={s.key} className="flex items-baseline gap-x-1.5">
               {i > 0 && <span aria-hidden>·</span>}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
                     <span className="text-subtle">{s.label}</span>{" "}
-                    <span className="text-xl font-semibold">{b ? b[s.key] : "—"}</span>
+                    <span className="text-base font-semibold">{b ? b[s.key] : "—"}</span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>{s.tip}</TooltipContent>
               </Tooltip>
             </span>
           ))}
-          <span className="text-subtle">/ {state.root.max_total} tUSD</span>
+          <span className="text-xs text-subtle">/ {state.root.max_total} tUSD</span>
         </p>
       </TooltipProvider>
       <div

@@ -13,15 +13,17 @@ function Row({ row, selected }: { row: RailRow; selected: boolean }) {
         type="button"
         onClick={() => select(row.key)}
         aria-current={selected ? "true" : undefined}
-        className={`grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 border-l-2 px-2 py-2 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
+        title={row.label}
+        className={`grid h-16 w-full min-w-0 grid-cols-[3ch_minmax(16ch,1fr)_auto] content-center items-baseline gap-x-2 gap-y-0.5 border-l-2 px-2 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
       >
         <span className="font-mono text-sm text-subtle">#{row.n}</span>
         <span className="truncate text-base">{row.label}</span>
-        <span />
-        <span className="col-start-2">
+        <span className="text-right font-mono text-xs whitespace-nowrap">
+          {row.amount ? `${row.amount} tUSD` : ""}
+        </span>
+        <span className="col-span-2 col-start-2 text-left">
           <StatusChip chip={row.chip} />
         </span>
-        <span className="font-mono text-sm">{row.amount ? `${row.amount} tUSD` : ""}</span>
       </button>
     </li>
   );

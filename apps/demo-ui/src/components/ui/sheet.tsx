@@ -62,7 +62,7 @@ function SheetContent({
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 text-base font-semibold underline underline-offset-4 outline-none hover:no-underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <SheetPrimitive.Close className="absolute top-4 right-4 text-base font-semibold underline underline-offset-4 outline-none hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
             Close <span aria-hidden>×</span>
           </SheetPrimitive.Close>
         )}

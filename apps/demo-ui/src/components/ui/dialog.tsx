@@ -55,7 +55,7 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute top-0 right-0 text-base font-semibold underline underline-offset-4 outline-none hover:no-underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="absolute top-0 right-0 text-base font-semibold underline underline-offset-4 outline-none hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               Close <span aria-hidden>×</span>
             </DialogPrimitive.Close>

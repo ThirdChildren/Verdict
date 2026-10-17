@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -113,13 +112,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       <Button
         type="button"
         variant={blocker === null ? "default" : "outline"}
-        className="w-full"
+        className="w-full uppercase"
         onClick={() => setOpen(true)}
         disabled={blocker !== null}
         aria-describedby={`${id}-why`}
         title="Start a new task (n)"
       >
-        <Plus aria-hidden /> New task
+        New task
       </Button>
       <p id={`${id}-why`} aria-live="polite" className="mt-2 text-sm text-muted-foreground">
         {blocker ?? "No new signature needed."}

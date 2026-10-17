@@ -20,12 +20,10 @@ export function BlockedScene(props: {
   if (payee) tried.push(["Payee", payee]);
   if (it.category) tried.push(["Category", it.category]);
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-5">
       <header className="grid gap-1">
-        <p className="text-base text-muted-foreground">Blocked attempt · {time(block.at)}</p>
-        <h2 className="font-display text-2xl font-bold">
-          The agent tried something outside its mandate
-        </h2>
+        <p className="text-base text-subtle">Blocked attempt · {time(block.at)}</p>
+        <h2 className="text-xl font-semibold">The agent tried something outside its mandate</h2>
       </header>
       {tried.length > 0 && (
         <section aria-label="What the agent tried">
@@ -33,7 +31,7 @@ export function BlockedScene(props: {
           <dl className="flex flex-wrap gap-x-12 gap-y-4">
             {tried.map(([k, v]) => (
               <div key={k}>
-                <dt className="text-base text-muted-foreground">{k}</dt>
+                <dt className="text-base text-subtle">{k}</dt>
                 <dd className="text-xl break-all">{v}</dd>
               </div>
             ))}

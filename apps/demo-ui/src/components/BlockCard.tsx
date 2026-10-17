@@ -1,35 +1,28 @@
 import type { BlockCode } from "@verdict/protocol";
-import { ShieldAlert } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { BLOCK_TITLES, blockReassurance } from "../lib/blocks.js";
 
 /** Catalogue messages already end with the reassurance sentence; it is shown once, below. */
 const REASSURANCE_DUP = /\s*Nothing was signed( and no funds moved|\.\s*No funds moved)\.?$/;
 
-/** Amber BLOCK card: the catalogue message verbatim plus what did not happen. */
+/** BLOCK card: plain text with a 2px ink rule. The catalogue message verbatim plus what did not happen. */
 export function BlockCard(props: {
   code: BlockCode;
   message: string;
   remaining?: string | null | undefined;
 }) {
   return (
-    <Alert
-      variant="danger"
+    <div
+      role="alert"
       aria-label={`Blocked: ${BLOCK_TITLES[props.code]}`}
-      className="bg-danger-soft p-6 shadow-none has-[>svg]:grid-cols-[calc(var(--spacing)*6)_1fr]"
+      className="grid gap-2 border-l-2 border-ink py-1 pl-4"
     >
-      <ShieldAlert aria-hidden className="size-6!" />
-      <AlertTitle className="line-clamp-none text-xl font-bold">
-        BLOCKED: {BLOCK_TITLES[props.code]}
-      </AlertTitle>
-      <AlertDescription className="text-danger-soft-foreground">
-        <p className="mt-2 text-base">{props.message.replace(REASSURANCE_DUP, "")}</p>
-        <p className="mt-4 text-base font-semibold">{blockReassurance(props.code)}</p>
-        {props.remaining && (
-          <p className="mt-1 text-base">Your budget is unchanged: {props.remaining} tUSD left.</p>
-        )}
-        <p className="mt-4 font-mono text-base">Reason code: {props.code}</p>
-      </AlertDescription>
-    </Alert>
+      <p className="text-xl font-semibold">BLOCKED: {BLOCK_TITLES[props.code]}</p>
+      <p className="text-base">{props.message.replace(REASSURANCE_DUP, "")}</p>
+      <p className="text-base font-semibold">{blockReassurance(props.code)}</p>
+      {props.remaining && (
+        <p className="text-base">Your budget is unchanged: {props.remaining} tUSD left.</p>
+      )}
+      <p className="font-mono text-base">Reason code: {props.code}</p>
+    </div>
   );
 }
