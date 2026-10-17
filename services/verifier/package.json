@@ -1,0 +1,30 @@
+{
+  "name": "@verdict/verifier",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run --reporter=dot --root ../.. --config vitest.config.ts services/verifier/src",
+    "rerun": "tsx src/rerun.ts",
+    "selftest": "tsx src/selftest.ts",
+    "keys": "tsx src/keys.ts"
+  },
+  "dependencies": {
+    "@verdict/http-local": "workspace:*",
+    "@verdict/identity": "workspace:*",
+    "@verdict/protocol": "workspace:*",
+    "fastify": "5.12.5",
+    "pino": "10.4.0"
+  },
+  "exports": {
+    "./runner": {
+      "types": "./src/runner.ts",
+      "default": "./src/runner.ts"
+    }
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}

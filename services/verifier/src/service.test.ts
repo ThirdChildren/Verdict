@@ -1,0 +1,288 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import {
+  contractHash,
+  createEd25519Signer,
+  type Envelope,
+  randomHex32,
+  type Signer,
+  sealPreimage,
+  sha256Hex,
+  signPayload,
+  type TaskContract,
+  taskId,
+  verifyPayload,
+} from "@verdict/protocol";
+import { dirHashFromDisk } from "@verdict/protocol/node";
+import { afterAll, describe, expect, it } from "vitest";
+import { buildEnvelope } from "./envelope.js";
+import { Registry } from "./registry.js";
+import { detectSandbox, type RunOptions, type RunResult } from "./runner.js";
+import { VerifierService } from "./service.js";
+
+const PKG = resolve(__dirname, "../../../verifier-packages/csv2json-v1");
+const GOOD = join(PKG, "fixtures/good-delivery");
+const BAD = join(PKG, "fixtures/bad-delivery");
+const ENGINE_URL = "http://engine.test";
+const WORKER_URL = "http://worker.test";
+const sandboxed = detectSandbox() !== null;
+const scratch = mkdtempSync(join(tmpdir(), "verifier-svc-"));
+afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+
+interface Sent {
+  url: string;
+  env: Record<string, unknown> & { type: string; body: Record<string, unknown> };
+}
+
+async function setup(opts: { run?: (o: RunOptions) => Promise<RunResult> } = {}) {
+  const seed = new Uint8Array(32).fill(7);
+  const verifier = await createEd25519Signer(seed);
+  const engine = await createEd25519Signer(new Uint8Array(32).fill(1));
+  const worker = await createEd25519Signer(new Uint8Array(32).fill(2));
+  const sent: Sent[] = [];
+  const fetchImpl = (async (url: string, init: { body: string }) => {
+    sent.push({ url, env: JSON.parse(init.body) });
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+  const service = new VerifierService({
+    signer: verifier,
+    seed,
+    packageDir: PKG,
+    registry: new Registry(null),
+    engineId: engine.publicId,
+    engineUrl: ENGINE_URL,
+    workerUrl: WORKER_URL,
+    fetchImpl,
+    preimageRetryMs: [0],
+    ...(opts.run ? { run: opts.run } : {}),
+  });
+  return { service, verifier, engine, worker, sent };
+}
+
+async function deposit(
+  ctx: Awaited<ReturnType<typeof setup>>,
+  over: { packageSha?: string; preimage?: string; hash?: string } = {},
+) {
+  const preimage = over.preimage ?? randomHex32();
+  const body = {
+    version: "verdict-task/0" as const,
+    buyer: ctx.engine.publicId,
+    worker: ctx.worker.publicId,
+    capability_hash: "e".repeat(64),
+    intent_sha256: "5".repeat(64),
+    payment: {
+      asset_id: "rgb:2dkSTbr-jFhznbPmo-TQafzswCN-av4gTsJjX-ttx6CNou5-M98k8Zd",
+      amount: "1.00",
+      payment_hash: over.hash ?? sha256Hex(Buffer.from(preimage, "hex")),
+      payee_node_id: `02${"9".repeat(64)}`,
+      expiry_blocks: 42,
+      expiry_seconds: 3600,
+    },
+    task: {
+      category: "code",
+      spec: "csv2json",
+      deadline: new Date(Date.now() + 20 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z"),
+      max_verify_seconds: 30,
+    },
+    verifier: {
+      public_id: ctx.verifier.publicId,
+      endpoint: "http://verifier.test",
+      package_sha256: over.packageSha ?? (await dirHashFromDisk(PKG)),
+      entrypoint: "./verify.sh",
+      rule: "EXIT_0_AND_SCHEMA_VALID" as const,
+    },
+    max_lock_seconds: 28800,
+    safety_margin_seconds: 600,
+  };
+  const contract: TaskContract = {
+    ...body,
+    signatures: {
+      buyer: await signPayload(ctx.engine, "TASK_CONTRACT", body),
+      worker: await signPayload(ctx.worker, "TASK_CONTRACT", body),
+    },
+  };
+  const tid = taskId(contract);
+  const env = (await buildEnvelope(
+    ctx.engine,
+    "P_DEPOSIT",
+    tid,
+    ctx.verifier.publicId,
+    { contract, sealed_preimage: await sealPreimage(preimage, ctx.verifier.publicId) },
+    new Date(),
+  )) as unknown as Envelope;
+  return { answer: await ctx.service.handle(env), contract, tid, preimage };
+}
+
+function bundle(dir: string): { b64: string; sha: string } {
+  const out = join(scratch, `b-${Math.random().toString(16).slice(2)}.tar.gz`);
+  const r = spawnSync("tar", ["-czf", out, "-C", dir, "."]);
+  if (r.status !== 0) throw new Error("tar failed");
+  const b64 = spawnSync("base64", ["-w0", out], { encoding: "utf8", maxBuffer: 20e6 }).stdout;
+  return { b64, sha: "" };
+}
+
+async function deliver(
+  ctx: Awaited<ReturnType<typeof setup>>,
+  d: { tid: string; contract: TaskContract },
+  dir: string,
+  opts: { announced?: string; from?: Signer; attempt?: number } = {},
+) {
+  const { b64 } = bundle(dir);
+  const env = (await buildEnvelope(
+    opts.from ?? ctx.worker,
+    "DELIVER",
+    d.tid,
+    ctx.verifier.publicId,
+    {
+      attempt: opts.attempt ?? 1,
+      delivery_sha256: opts.announced ?? (await dirHashFromDisk(dir)),
+      bundle_b64: b64,
+      self_check_exit_code: 0,
+    },
+    new Date(),
+  )) as unknown as Envelope;
+  const a = await ctx.service.handle(env);
+  await ctx.service.idle();
+  return a;
+}
+
+const ofType = (ctx: { sent: Sent[] }, type: string) => ctx.sent.filter((s) => s.env.type === type);
+
+describe("P_DEPOSIT", () => {
+  it("confirms to the worker and the engine when sha256(P) = H and the package hash matches", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx);
+    expect(d.answer.ok).toBe(true);
+    const conf = ofType(ctx, "P_CONFIRM");
+    expect(conf.map((c) => c.url).sort()).toEqual([
+      `${ENGINE_URL}/v0/messages`,
+      `${WORKER_URL}/v0/messages`,
+    ]);
+    expect(conf[0]?.env.body).toMatchObject({ confirmed: true, task_id: d.tid });
+    expect(JSON.stringify(ctx.sent)).not.toContain(d.preimage);
+  });
+
+  it("refuses a sealed secret that does not hash to the payment hash", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx, { hash: "a".repeat(64) });
+    expect(d.answer).toMatchObject({ ok: false, code: "PREIMAGE_MISMATCH" });
+    expect(ctx.sent).toHaveLength(0);
+  });
+
+  it("refuses a contract that names a different verifier package", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx, { packageSha: "b".repeat(64) });
+    expect(d.answer).toMatchObject({ ok: false, code: "PACKAGE_HASH_MISMATCH" });
+    expect(ctx.sent).toHaveLength(0);
+  });
+});
+
+describe.skipIf(!sandboxed)("DELIVER (real sandboxed runner)", () => {
+  it("PASS: signs RELEASE, sends VERDICT to engine and worker, then the preimage to the worker only", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx);
+    const a = await deliver(ctx, d, GOOD);
+    expect(a.ok).toBe(true);
+    const verdicts = ofType(ctx, "VERDICT");
+    expect(verdicts).toHaveLength(2);
+    const record = verdicts[0]?.env.body as Record<string, unknown>;
+    expect(record).toMatchObject({ verdict: "RELEASE", exit_code: 0, attempt: 1 });
+    expect(record.contract_sha256).toBe(
+      contractHash(d.contract as unknown as Record<string, unknown>),
+    );
+    const { verifier_sig, ...unsigned } = record;
+    expect(
+      await verifyPayload("VERDICT", unsigned, ctx.verifier.publicId, String(verifier_sig)),
+    ).toBe(true);
+    const pre = ofType(ctx, "PREIMAGE");
+    expect(pre).toHaveLength(1);
+    expect(pre[0]?.url).toBe(`${WORKER_URL}/v0/messages`);
+    expect(pre[0]?.env.body).toMatchObject({ preimage_hex: d.preimage, reason: "VERDICT_RELEASE" });
+    expect(
+      await ctx.service.handle(
+        (await buildEnvelope(
+          ctx.worker,
+          "DELIVER",
+          d.tid,
+          ctx.verifier.publicId,
+          {
+            attempt: 2,
+            delivery_sha256: "0".repeat(64),
+            bundle_b64: "",
+            self_check_exit_code: 0,
+          },
+          new Date(),
+        )) as unknown as Envelope,
+      ),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("FAIL is final: signs WITHHOLD, never opens or sends the preimage, and refuses a redelivery (M5)", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx);
+    await deliver(ctx, d, BAD, { attempt: 1 });
+    const again = await deliver(ctx, d, BAD, { attempt: 2 });
+    expect(again).toMatchObject({ ok: false });
+    expect(ofType(ctx, "PREIMAGE")).toHaveLength(0);
+    expect(JSON.stringify(ctx.sent)).not.toContain(d.preimage);
+    const verdicts = ofType(ctx, "VERDICT").filter((v) => v.url.startsWith(ENGINE_URL));
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]?.env.body).toMatchObject({ verdict: "WITHHOLD", exit_code: 1 });
+    const report = ctx.service.reports()[0]?.reports[0];
+    expect(report).toMatchObject({ outcome: "FAIL", sandbox: expect.any(String) });
+    expect(report?.log_tail.join("\n")).toContain('"id":"tests","status":"fail"');
+  });
+
+  it("a delivery that differs from its announced hash is WITHHOLD and is not run", async () => {
+    let ran = false;
+    const ctx = await setup({
+      run: async () => {
+        ran = true;
+        throw new Error("must not run");
+      },
+    });
+    const d = await deposit(ctx);
+    await deliver(ctx, d, GOOD, { announced: "0".repeat(64) });
+    expect(ran).toBe(false);
+    expect(ofType(ctx, "VERDICT")[0]?.env.body).toMatchObject({
+      verdict: "WITHHOLD",
+      exit_code: -1,
+    });
+    expect(ctx.service.reports()[0]?.reports[0]?.code).toBe("DELIVERY_HASH_MISMATCH");
+    expect(ofType(ctx, "PREIMAGE")).toHaveLength(0);
+  });
+});
+
+describe("fail closed", () => {
+  it("a runner that throws or times out never releases", async () => {
+    const ctx = await setup({
+      run: async () => ({
+        outcome: "WITHHOLD",
+        exitCode: null,
+        checks: [],
+        sandbox: "bwrap",
+        code: "VERIFY_TIMEOUT",
+        message: "Verification timed out.",
+      }),
+    });
+    const d = await deposit(ctx);
+    await deliver(ctx, d, GOOD);
+    expect(ofType(ctx, "VERDICT")[0]?.env.body).toMatchObject({
+      verdict: "WITHHOLD",
+      exit_code: -1,
+    });
+    expect(ofType(ctx, "PREIMAGE")).toHaveLength(0);
+    expect(ctx.service.reports()[0]?.reports[0]?.code).toBe("VERIFY_TIMEOUT");
+  });
+
+  it("a delivery from anyone but the contract's worker is refused", async () => {
+    const ctx = await setup();
+    const d = await deposit(ctx);
+    const stranger = await createEd25519Signer(new Uint8Array(32).fill(9));
+    const a = await deliver(ctx, d, GOOD, { from: stranger });
+    expect(a).toMatchObject({ ok: false, code: "SIGNATURE_INVALID" });
+    expect(ofType(ctx, "VERDICT")).toHaveLength(0);
+  });
+});

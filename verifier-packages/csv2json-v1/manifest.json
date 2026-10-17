@@ -1,0 +1,9 @@
+{
+  "entry": "csv2json.mjs",
+  "cases_dir": "cases",
+  "input_ext": ".csv",
+  "expected_ext": ".expected.json",
+  "output_ext": ".out.json",
+  "case_timeout_seconds": 10,
+  "max_output_bytes": 1048576
+}
