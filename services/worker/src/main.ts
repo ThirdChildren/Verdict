@@ -13,6 +13,7 @@ import {
   WalletClient,
 } from "@verdict/wallet";
 import { DEFAULT_MAX_TOKENS, llmGenerator } from "./agent/generate.js";
+import { loadPackageTask } from "./agent/package.js";
 import { DEFAULT_PACKAGE_DIR, localSelfCheck } from "./agent/selfcheck.js";
 import { WorkerNode } from "./node/node.js";
 import { buildServer, LAN_ROUTES, SERVICE } from "./server.js";
@@ -60,7 +61,8 @@ try {
     wallet,
     assetId: net.tusd_asset_id,
     precision: net.tusd_precision,
-    generator: llmGenerator(llm, maxTokens),
+    // Format-2 packages drive the prompt from their manifest; csv2json-v1 keeps its measured prompt.
+    generator: llmGenerator(llm, maxTokens, loadPackageTask(packageDir)),
     check: localSelfCheck({ packageDir }),
     packageSha256: () => dirHashFromDisk(packageDir),
     sabotaged: () => sabotaged,

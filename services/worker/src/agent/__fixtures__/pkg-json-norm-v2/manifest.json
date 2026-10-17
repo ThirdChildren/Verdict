@@ -1,0 +1,41 @@
+{
+  "format": 2,
+  "id": "json-norm-test-v1",
+  "description": "Normalise a JSON file: sort object keys alphabetically at every level and print it with 2-space indent.",
+  "profile": "standard",
+  "entry": "normalise.mjs",
+  "cases_dir": "cases",
+  "visible_dir": "visible",
+  "input_ext": ".json",
+  "expected_ext": ".expected.json",
+  "output_ext": ".out.json",
+  "case_timeout_seconds": 10,
+  "max_output_bytes": 1048576,
+  "checks": [
+    { "id": "fixtures", "kind": "fixtures", "weight": 50, "required": true, "params": {} },
+    {
+      "id": "no-network",
+      "kind": "static",
+      "weight": 0,
+      "required": true,
+      "params": {
+        "banned_imports": ["net", "http", "child_process"],
+        "banned_tokens": ["fetch", "import("]
+      }
+    },
+    {
+      "id": "size",
+      "kind": "limits",
+      "weight": 5,
+      "required": false,
+      "params": { "max_source_bytes": 20000, "max_lines": 300 }
+    },
+    {
+      "id": "request",
+      "kind": "spec",
+      "weight": 10,
+      "required": true,
+      "params": { "file": "spec/assertions.json" }
+    }
+  ]
+}

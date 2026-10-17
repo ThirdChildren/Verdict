@@ -1,5 +1,6 @@
 import type { LlmClient } from "@verdict/llm";
 import type { DeliveryFile } from "../store.js";
+import { buildPackagePrompt, type PackageTask } from "./package.js";
 
 export interface Generated {
   files: DeliveryFile[];
@@ -40,7 +41,7 @@ export type Generator = (
 
 // The task text states exactly what the automatic test checks (not the test files themselves), so the model is
 // never judged on a detail it was not told. Diagnosed in P3.2c: 4 of 5 failures were "split on newlines first".
-const SYSTEM = `You are a careful JavaScript engineer. You write exactly one file: csv2json.mjs, a zero-dependency Node.js ESM command line tool.
+export const V1_SYSTEM = `You are a careful JavaScript engineer. You write exactly one file: csv2json.mjs, a zero-dependency Node.js ESM command line tool.
 Usage: node csv2json.mjs <input.csv>. It prints the CSV as a JSON array of objects to stdout.
 
 Output format:
@@ -103,11 +104,22 @@ export class NoCodeError extends Error {
 /** Per-attempt token cap, measured on the Legion with the real 9B. */
 export const DEFAULT_MAX_TOKENS = 4000;
 
-export function llmGenerator(llm: LlmClient, maxTokens = DEFAULT_MAX_TOKENS): Generator {
+/** The system prompt for a package: format 2 is built from its manifest, format 1 (task absent) keeps the csv2json text. */
+export function systemPrompt(task?: PackageTask | null): string {
+  return task ? buildPackagePrompt(task) : V1_SYSTEM;
+}
+
+export function llmGenerator(
+  llm: LlmClient,
+  maxTokens = DEFAULT_MAX_TOKENS,
+  task?: PackageTask | null,
+): Generator {
+  const system = systemPrompt(task);
+  const entry = task?.entry ?? "csv2json.mjs";
   return async (spec, retry, hooks, limits) => {
     const r = await llm.generateText(
       [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: system },
         { role: "user", content: `Task: ${spec}` },
         ...(retry
           ? [
@@ -132,7 +144,7 @@ export function llmGenerator(llm: LlmClient, maxTokens = DEFAULT_MAX_TOKENS): Ge
     const code = extractCode(r.text);
     if (code.trim().length < 20) throw new NoCodeError();
     return {
-      files: [{ path: "csv2json.mjs", content: code }],
+      files: [{ path: entry, content: code }],
       model: llm.modelName,
       generationMs: r.stats.wallMs,
       generatedTokens: r.stats.generatedTokens,

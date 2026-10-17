@@ -1,11 +1,19 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectSandbox, runVerification, sandboxArgv } from "@verdict/verifier/runner";
 import type { DeliveryFile } from "../store.js";
 import { storeDelivery } from "../store.js";
+import {
+  loadPackageTask,
+  type PackageTask,
+  packageId,
+  packagesRoot,
+  readManifest,
+  resolvePackageDir,
+} from "./package.js";
 
 export interface SelfCheck {
   /** PASS and FAIL come from the real verifier package; WITHHOLD means the local check could not run. */
@@ -23,13 +31,75 @@ export type CheckFn = (files: DeliveryFile[]) => Promise<SelfCheck>;
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PACKAGE_DIR = resolve(HERE, "../../../../verifier-packages/csv2json-v1");
 
-const HINTS: Record<string, string> = {
-  tests:
+/** Hints keyed by `package_id/check_id`. Only check ids and generic advice, never hidden case content. */
+export const HINTS: Record<string, string> = {
+  "csv2json-v1/tests":
     "Your tool printed the wrong JSON for at least one of the six test files. Re-check: a quoted field that contains a line break (parse the whole file character by character, never split on newlines first), doubled quotes, CRLF, empty cells, header-only file, key order, all values strings, indent 2.",
-  schema: "The output is not an array of objects with string values.",
-  "no-network":
+  "csv2json-v1/schema": "The output is not an array of objects with string values.",
+  "csv2json-v1/no-network":
     "The code uses a forbidden import (network or process module, fetch, import() or require()).",
 };
+
+/** Used when a package/check pair has no specific hint. */
+export const GENERIC_HINTS: Record<string, string> = {
+  fixtures:
+    "The output differs from the expected output for at least one test input. Compare it with the examples in the task, character by character.",
+  visible: "The output differs from the expected output of a shown example.",
+  schema: "The output does not have the required structure.",
+  property:
+    "Equivalent inputs must give identical output; the result depends on something it should ignore.",
+  static: "The code uses a forbidden import or token listed in the rules.",
+  limits: "The source file is over the size limits listed in the rules.",
+  spec: "The output breaks one of the rules listed in the task.",
+};
+export const FALLBACK_HINT = "Read the task and its rules again and fix this.";
+
+export function hintFor(pkgId: string, checkId: string, kind?: string): string {
+  return (
+    HINTS[`${pkgId}/${checkId}`] ??
+    (kind ? GENERIC_HINTS[kind] : undefined) ??
+    GENERIC_HINTS[checkId] ??
+    FALLBACK_HINT
+  );
+}
+
+/** Runs the entry on the visible inputs in the sandbox and describes the first output that differs. Text for the model. */
+export function probeVisible(deliveryDir: string, task: PackageTask): string {
+  try {
+    const kind = detectSandbox();
+    if (kind === null) return "";
+    const base = join(deliveryDir, "..", "visible-probe");
+    const scratch = join(deliveryDir, "..", "visible-scratch");
+    mkdirSync(base, { recursive: true });
+    mkdirSync(scratch, { recursive: true, mode: 0o777 });
+    for (const p of task.visible) {
+      // Pairs are capped copies; truncated ones cannot be compared, so skip them.
+      if (p.input.endsWith("[... truncated]") || p.expected.endsWith("[... truncated]")) continue;
+      const name = `${p.name}${task.inputExt}`;
+      writeFileSync(join(base, name), p.input);
+      const [cmd, args] = sandboxArgv(
+        kind,
+        { delivery: deliveryDir, inputs: base, scratch },
+        task.entry,
+        name,
+        { cpuSeconds: 10, fsizeBytes: 1024 * 1024 },
+      );
+      const r = spawnSync(cmd, args, {
+        cwd: deliveryDir,
+        encoding: "utf8",
+        timeout: 10000,
+        env: { PATH: process.env.PATH ?? "", LANG: "C" },
+      });
+      if (r.error || r.status !== 0)
+        return `On the shown example "${p.name}" it crashed (exit ${r.status}). Error output:\n${(r.stderr ?? "").slice(-500)}`;
+      if (r.stdout.trim() !== p.expected.trim())
+        return `On the shown example "${p.name}" with input ${JSON.stringify(p.input)} it printed ${JSON.stringify(r.stdout.slice(0, 400))} but the expected output is ${JSON.stringify(p.expected)}.`;
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
 
 // The worker's own sample (not a test file of the package): quoted comma, doubled quotes, line break in quotes.
 const SAMPLE_CSV = 'id,note\n1,"hello, world"\n2,"she said ""hi"""\n3,"line\nbreak"\n';
@@ -83,13 +153,28 @@ export function probeSample(deliveryDir: string): string {
 export function localSelfCheck(
   opts: {
     packageDir?: string;
+    /** The contract's package_sha256: the package is found by hash under `packagesRoot` (never a fake PASS if absent). */
+    packageSha256?: string | (() => string | undefined);
+    packagesRoot?: string;
     maxVerifySeconds?: number;
     /** Test seam; defaults to the verifier's sandbox detection. */
     detect?: () => unknown;
   } = {},
 ): CheckFn {
-  const packageDir = opts.packageDir ?? process.env.VERIFIER_PACKAGE_DIR ?? DEFAULT_PACKAGE_DIR;
   return async (files) => {
+    const sha =
+      typeof opts.packageSha256 === "function" ? opts.packageSha256() : opts.packageSha256;
+    let packageDir: string;
+    if (sha !== undefined) {
+      const found = await resolvePackageDir(sha, opts.packagesRoot ?? packagesRoot());
+      if (found === null)
+        return {
+          outcome: "WITHHOLD",
+          failedChecks: [],
+          feedback: `package not available locally (sha256 ${sha}); no self-check was run`,
+        };
+      packageDir = found;
+    } else packageDir = opts.packageDir ?? process.env.VERIFIER_PACKAGE_DIR ?? DEFAULT_PACKAGE_DIR;
     // Without a sandbox nothing can be checked, so the attempt counts as failed (it is never delivered unchecked).
     if ((opts.detect ?? detectSandbox)() === null)
       return {
@@ -110,8 +195,26 @@ export function localSelfCheck(
       if (r.outcome === "WITHHOLD")
         return { outcome: "WITHHOLD", failedChecks: [], feedback: r.message };
       const failedChecks = r.checks.filter((c) => c.status === "fail").map((c) => c.id);
-      const probe = failedChecks.length > 0 ? `\n${probeSample(dir)}` : "";
-      const feedback = `${failedChecks.map((id) => `- ${id}: failed. ${HINTS[id] ?? ""}`).join("\n")}${probe}`;
+      let id = basename(packageDir);
+      let kinds = new Map<string, string>();
+      let task: PackageTask | null = null;
+      try {
+        const m = readManifest(packageDir);
+        id = packageId(packageDir, m);
+        kinds = new Map((m.checks ?? []).map((c) => [c.id, c.kind]));
+        task = loadPackageTask(packageDir);
+      } catch {
+        // keep the directory name
+      }
+      let probe = "";
+      if (failedChecks.length > 0) {
+        if (task === null) probe = `\n${probeSample(dir)}`;
+        else if (failedChecks.some((c) => kinds.get(c) === "fixtures")) {
+          const p = probeVisible(dir, task);
+          probe = p ? `\n${p}` : "";
+        }
+      }
+      const feedback = `${failedChecks.map((c) => `- ${c}: failed. ${hintFor(id, c, kinds.get(c))}`).join("\n")}${probe}`;
       return { outcome: "FAIL", failedChecks, feedback };
     } catch (e) {
       return { outcome: "WITHHOLD", failedChecks: [], feedback: (e as Error).message };
