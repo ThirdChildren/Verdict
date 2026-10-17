@@ -1,0 +1,1 @@
+{"name":"spike-p0-2-qvac","private":true,"type":"module","scripts":{"start":"tsx run.ts"},"dependencies":{"@qvac/sdk":"0.21.0","tsx":"4.23.15","zod":"4.6.5"}}

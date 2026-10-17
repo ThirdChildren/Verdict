@@ -1,0 +1,1 @@
+{"name":"spike-p0-4-signatures","private":true,"type":"module","dependencies":{"@tetherto/wdk-wallet-evm":"1.0.0-beta.20","libsodium-wrappers":"0.8.4","bip39":"3.1.0","ethers":"6.17.0","canonicalize":"5.1.0","tsx":"4.23.15"}}

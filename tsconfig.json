@@ -7,6 +7,7 @@
     { "path": "packages/http-local" },
     { "path": "packages/mandate-guard" },
     { "path": "apps/wallet-daemon" },
+    { "path": "packages/llm" },
     { "path": "scripts" }
   ]
 }

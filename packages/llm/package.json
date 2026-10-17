@@ -1,0 +1,22 @@
+{
+  "name": "@verdict/llm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@verdict/protocol": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "scripts": {
+    "test": "vitest run --reporter=dot --root ../.. --config vitest.config.ts packages/llm/src"
+  },
+  "devDependencies": {
+    "@qvac/sdk": "0.21.0"
+  }
+}
