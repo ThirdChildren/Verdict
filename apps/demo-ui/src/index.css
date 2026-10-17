@@ -1,0 +1,182 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Semantic tokens. Light is the default (high contrast); `.dark` on <html> flips them, and
+   portalled dialogs, sheets and toasts live under <body>, so they follow the same class. */
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f8fafc;
+  --muted-foreground: #475569;
+  --accent: #eff6ff;
+  --accent-foreground: #1e3a8a;
+  --destructive: #b91c1c;
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #1d4ed8;
+  /* semantic: blue = refunded / released / in progress, amber = locked, green = paid, red = blocked / failed */
+  --info: #1d4ed8;
+  --info-soft: #eff6ff;
+  --info-soft-foreground: #1e3a8a;
+  --info-border: #bfdbfe;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --warn-soft-foreground: #78350f;
+  --warn-border: #fcd34d;
+  --ok: #15803d;
+  --ok-soft: #f0fdf4;
+  --ok-soft-foreground: #14532d;
+  --ok-border: #86efac;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-soft-foreground: #7f1d1d;
+  --danger-border: #fca5a5;
+  --radius: 0.5rem;
+}
+.dark {
+  color-scheme: dark;
+  --background: #0b1220;
+  --foreground: #f1f5f9;
+  --card: #0f172a;
+  --card-foreground: #f1f5f9;
+  --popover: #0f172a;
+  --popover-foreground: #f1f5f9;
+  --primary: #93c5fd;
+  --primary-foreground: #0b1220;
+  --secondary: #1e293b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #111a2e;
+  --muted-foreground: #a8b5c8;
+  --accent: #172554;
+  --accent-foreground: #dbeafe;
+  --destructive: #fca5a5;
+  --border: #243049;
+  --input: #3b4a66;
+  --ring: #93c5fd;
+  --info: #93c5fd;
+  --info-soft: #172554;
+  --info-soft-foreground: #dbeafe;
+  --info-border: #1e40af;
+  --warn: #fcd34d;
+  --warn-soft: #2a1a05;
+  --warn-soft-foreground: #fde68a;
+  --warn-border: #92400e;
+  --ok: #86efac;
+  --ok-soft: #06230f;
+  --ok-soft-foreground: #bbf7d0;
+  --ok-border: #166534;
+  --danger: #fca5a5;
+  --danger-soft: #2a0a0a;
+  --danger-soft-foreground: #fecaca;
+  --danger-border: #991b1b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
+  --color-info-border: var(--info-border);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-soft-foreground: var(--warn-soft-foreground);
+  --color-warn-border: var(--warn-border);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-soft-foreground: var(--ok-soft-foreground);
+  --color-ok-border: var(--ok-border);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-danger-border: var(--danger-border);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-display: Fraunces, Georgia, serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  /* Type scale: 13 / 14 / 16 / 20 / 28 / 40 px and two weights (400, 600). Nothing else is reachable. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 1.75rem;
+  --text-4xl: 2.5rem;
+  --text-5xl: 2.5rem;
+  --text-6xl: 2.5rem;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+}
+html {
+  font-family: "Public Sans", system-ui, sans-serif;
+  font-size: 16px;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+.font-display {
+  font-family: Fraunces, Georgia, serif;
+}
+:focus-visible {
+  outline: 4px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion must win over utilities */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion must win over utilities */
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Presenter size (125% on projector-sized screens, 112.5% below so the top bar still fits): every type size and spacing step is rem, so one root font-size scales the whole screen. */
+html.presenter {
+  font-size: 112.5%;
+}
+@media (min-width: 1536px) {
+  html.presenter {
+    font-size: 125%;
+  }
+}

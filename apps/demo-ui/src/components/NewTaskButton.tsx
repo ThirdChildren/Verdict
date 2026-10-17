@@ -1,0 +1,188 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ApiError } from "../lib/api.js";
+import { fromMinor, toMinor } from "../lib/money.js";
+import { useStartTask } from "../lib/queries.js";
+import {
+  AMOUNT_STEP,
+  amountProblem,
+  composeTaskGoal,
+  DEFAULT_TASK_DESCRIPTION,
+  defaultTaskAmount,
+} from "../lib/taskText.js";
+import { useStore } from "../store.js";
+
+/** Why a new task cannot start, or null when it can. */
+export function newTaskBlocker(
+  hasRoot: boolean,
+  remaining: string | null,
+  precision: number,
+): string | null {
+  if (!hasRoot) return "Sign a mandate first. A new task needs an active mandate.";
+  if (remaining !== null && toMinor(remaining, precision) === 0n)
+    return `The mandate budget is used up (${fromMinor(0n, precision)} tUSD remaining). Sign a new mandate to continue.`;
+  return null;
+}
+
+/** Name to put in the task text: the worker named in the signed mandate, else the planner's default "worker". */
+export function workerNameFor(payees: string[], names: Record<string, string>): string {
+  const first = payees[0];
+  return (first ? names[first] : undefined) ?? "worker";
+}
+
+/** Form schema; the amount ceiling is whatever the engine last reported as remaining. */
+export function taskFormSchema(remaining: string, precision: number) {
+  return z.object({
+    description: z.string().trim().min(3, "Describe the work in at least 3 characters.").max(300),
+    amount: z.string().superRefine((v, ctx) => {
+      const p = amountProblem(v, remaining, precision);
+      if (p) ctx.addIssue({ code: "custom", message: p });
+    }),
+  });
+}
+type TaskForm = z.infer<ReturnType<typeof taskFormSchema>>;
+
+/** "New task" button and its dialog. `openSignal` lets a keyboard shortcut open it. */
+export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
+  const id = useId();
+  const root = useStore((s) => s.root);
+  const budget = useStore((s) => s.budget);
+  const precision = useStore((s) => s.precision);
+  const names = useStore((s) => s.payeeNames);
+  const [open, setOpen] = useState(false);
+  // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
+  const remaining = budget?.remaining ?? root?.max_total ?? "0";
+  const blocker = newTaskBlocker(root !== null, budget?.remaining ?? null, precision);
+  const schema = useMemo(() => taskFormSchema(remaining, precision), [remaining, precision]);
+  const form = useForm<TaskForm>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      description: DEFAULT_TASK_DESCRIPTION,
+      amount: defaultTaskAmount(remaining, precision),
+    },
+  });
+  const worker = workerNameFor(root?.allowed_payees ?? [], names);
+  const start = useStartTask();
+  const { reset } = form;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a changed signal opens the dialog
+  useEffect(() => {
+    if (openSignal > 0 && !blocker) setOpen(true);
+  }, [openSignal]);
+  // Each time the dialog opens, start from the defaults for what is left.
+  useEffect(() => {
+    if (open)
+      reset({
+        description: DEFAULT_TASK_DESCRIPTION,
+        amount: defaultTaskAmount(remaining, precision),
+      });
+  }, [open, remaining, precision, reset]);
+
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      await start.mutateAsync({
+        amount: v.amount,
+        goal: composeTaskGoal(v.amount, worker, v.description),
+      });
+      toast.success(`Task sent: ${v.amount} tUSD to ${worker}.`);
+      setOpen(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong.");
+    }
+  });
+  const amount = form.watch("amount");
+  const description = form.watch("description");
+  const errors = form.formState.errors;
+  return (
+    <section aria-label="New task">
+      <Button
+        type="button"
+        variant={blocker === null ? "default" : "outline"}
+        className="w-full"
+        onClick={() => setOpen(true)}
+        disabled={blocker !== null}
+        aria-describedby={`${id}-why`}
+        title="Start a new task (n)"
+      >
+        <Plus aria-hidden /> New task
+      </Button>
+      <p id={`${id}-why`} aria-live="polite" className="mt-2 text-sm text-muted-foreground">
+        {blocker ?? "No new signature needed."}
+      </p>
+      <Dialog open={open && !blocker} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <form onSubmit={submit} className="grid gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle className="text-2xl">New task</DialogTitle>
+              <DialogDescription>
+                The agent gets a narrower permission just for this task. No new signature needed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor={`${id}-d`} className="text-lg font-bold">
+                What should the worker do?
+              </Label>
+              <Input
+                id={`${id}-d`}
+                maxLength={300}
+                aria-invalid={errors.description !== undefined}
+                {...form.register("description")}
+              />
+              {errors.description && (
+                <p role="alert" className="font-semibold text-warn-soft-foreground">
+                  {errors.description.message}
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`${id}-a`} className="text-lg font-bold">
+                Amount for this task (tUSD, up to {remaining} left in the mandate)
+              </Label>
+              <Input
+                id={`${id}-a`}
+                type="number"
+                inputMode="decimal"
+                step={AMOUNT_STEP}
+                min={AMOUNT_STEP}
+                className="w-40"
+                aria-invalid={errors.amount !== undefined}
+                {...form.register("amount")}
+              />
+              {errors.amount && (
+                <p role="alert" className="font-semibold text-warn-soft-foreground">
+                  {errors.amount.message}
+                </p>
+              )}
+            </div>
+            <p className="text-base text-muted-foreground">
+              The agent will be told: "{composeTaskGoal(amount, worker, description)}"
+            </p>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={start.isPending}>
+                {start.isPending ? "Sending..." : "Start task"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}

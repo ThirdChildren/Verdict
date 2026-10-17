@@ -13,6 +13,7 @@
     { "path": "services/buyer-agent" },
     { "path": "services/worker" },
     { "path": "services/verifier" },
+    { "path": "apps/demo-ui" },
     { "path": "scripts" }
   ]
 }

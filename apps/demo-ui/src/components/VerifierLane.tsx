@@ -1,0 +1,108 @@
+import { CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { fetchVerifierTasks, type VerifierTaskView } from "../lib/verifierApi.js";
+import { useStore } from "../store.js";
+import { Hash } from "./Hash.js";
+
+const REASON: Record<string, string> = {
+  VERIFY_TIMEOUT: "The check ran out of time, so the delivery counts as failed.",
+  DELIVERY_HASH_MISMATCH: "The files received are not the files the worker announced.",
+  PACKAGE_HASH_MISMATCH: "The test package on this machine is not the one the contract names.",
+  DELIVERY_REJECTED:
+    "The delivery contained something that is not allowed (links, odd paths, too large).",
+  SANDBOX_UNAVAILABLE: "No network sandbox is available here, so the delivery was not run.",
+};
+
+/** Verifier lane: what the independent verifier ran, in which sandbox, and what it signed. No model decides this. */
+export function VerifierLane() {
+  const [task, setTask] = useState<VerifierTaskView | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const tasks = await fetchVerifierTasks();
+        if (stop) return;
+        setTask(
+          [...tasks].reverse().find((t) => t.reports.length > 0) ?? tasks[tasks.length - 1] ?? null,
+        );
+        useStore.getState().setConnection("verifier", "connected");
+      } catch {
+        if (!stop) useStore.getState().setConnection("verifier", "disconnected");
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 2000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const report = task?.reports[task.reports.length - 1];
+  const pass = report?.outcome === "PASS";
+  return (
+    <section aria-label="Verifier" className="rounded-xl border-2 border-foreground bg-card p-5">
+      <h2 className="flex items-center gap-2 text-xl font-bold">
+        <ShieldCheck aria-hidden className="size-6" /> Verifier
+      </h2>
+      <p aria-live="polite" className="mt-2">
+        {!task && "Waiting for a task."}
+        {task && !report && "Holding the release secret. Waiting for the worker's delivery."}
+        {report && (
+          <span className="flex items-center gap-2 text-2xl font-bold">
+            {pass ? (
+              <CheckCircle2 aria-hidden className="size-7 text-info" />
+            ) : (
+              <XCircle aria-hidden className="size-7 text-danger-soft-foreground" />
+            )}
+            {pass
+              ? "PASS: the delivery passed every check. The secret was released to the worker."
+              : "FAIL: the delivery was rejected. The secret stays locked."}
+          </span>
+        )}
+      </p>
+      {report && (
+        <>
+          {!pass && (
+            <p className="mt-2 font-semibold">
+              {report.code ? (REASON[report.code] ?? report.message) : "At least one check failed."}
+            </p>
+          )}
+          <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-base">
+            <dt className="font-semibold">Checks</dt>
+            <dd>
+              {report.record.checks.length === 0
+                ? "none ran"
+                : report.record.checks
+                    .map((c) => `${c.id}: ${c.status === "PASS" ? "passed" : "failed"}`)
+                    .join(" · ")}
+            </dd>
+            <dt className="font-semibold">Sandbox</dt>
+            <dd>
+              {report.sandbox} (no network, fresh folder, {report.seconds} s)
+            </dd>
+            <dt className="font-semibold">verify.sh</dt>
+            <dd>
+              <Hash value={report.verify_sh_sha256} label="verify.sh hash" />
+            </dd>
+            <dt className="font-semibold">Test package</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              <Hash value={report.record.verifier_package_sha256} label="package hash" />
+              (the contract names this hash)
+            </dd>
+            <dt className="font-semibold">Exit code</dt>
+            <dd>{report.record.exit_code}</dd>
+            <dt className="font-semibold">Signed verdict</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              {report.record.verdict} · attempt {report.record.attempt} · signature
+              <Hash value={report.record.verifier_sig} label="verdict signature" />
+            </dd>
+          </dl>
+          <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-muted p-3 font-mono text-sm">
+            {report.log_tail.join("\n")}
+          </pre>
+        </>
+      )}
+    </section>
+  );
+}
