@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useStore } from "../store.js";
 import {
   type Chain,
@@ -30,9 +30,12 @@ export function useDescriptions(): Record<string, string> {
   useEffect(() => {
     if (known > 0) void refetch();
   }, [known, refetch]);
-  const out: Record<string, string> = {};
-  for (const t of q.data?.tasks ?? []) out[t.task_id] = t.description;
-  return out;
+  // Stable identity until the list really changes, so the rail does not rebuild on every event.
+  return useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const t of q.data?.tasks ?? []) out[t.task_id] = t.description;
+    return out;
+  }, [q.data]);
 }
 
 export interface ChainInfo {

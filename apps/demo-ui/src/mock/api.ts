@@ -88,7 +88,24 @@ export async function fetchChain(): Promise<Chain> {
   };
 }
 
+/** MOCK DATA: what GET /api/mandates and GET /api/tasks would return for the active storyboard scene. */
+export interface MockHistory {
+  mandates: unknown;
+  tasks: { task_id: string; description: string; amount: string; root_hash: string }[];
+}
+let history: MockHistory | null = null;
+export function setMockHistory(h: MockHistory | null): void {
+  history = h;
+}
+export async function fetchMandatesJson(): Promise<unknown> {
+  return history?.mandates ?? { mandates: [] };
+}
+export async function fetchTasksJson(): Promise<unknown> {
+  return { tasks: history?.tasks ?? (await fetchTasks()).tasks };
+}
+
 export async function fetchTasks(): Promise<TaskList> {
+  if (history) return { tasks: history.tasks };
   return {
     tasks: [{ task_id: TASK, description: "Convert a CSV file into JSON", amount: "1.20" }],
   };

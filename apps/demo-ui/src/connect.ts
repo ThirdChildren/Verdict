@@ -1,3 +1,4 @@
+import { hydrateFromApi } from "./lib/hydrate.js";
 import { parseMineEvent } from "./lib/mine.js";
 import { parseUiEvent } from "./lib/parse.js";
 import { parseRetiredEvent } from "./lib/retired.js";
@@ -23,7 +24,10 @@ export function connectEngine(): () => void {
   const open = () => {
     set("engine", "connecting");
     ws = new WebSocket(engineUrl());
-    ws.onopen = () => set("engine", "connected");
+    ws.onopen = () => {
+      set("engine", "connected");
+      void hydrateFromApi();
+    };
     ws.onmessage = (m) => {
       const mined = parseMineEvent(m.data);
       if (mined) return useStore.getState().setMine(mined);

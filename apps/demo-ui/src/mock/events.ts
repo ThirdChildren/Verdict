@@ -1,5 +1,5 @@
 // MOCK DATA: hand-written stream for UI development only (?mock=1). Never shown without the MOCK DATA banner.
-import { type UiEvent, uiEventSchema } from "@verdict/protocol";
+import { capabilityHash, type UiEvent, uiEventSchema } from "@verdict/protocol";
 
 const h = (c: string) => c.repeat(64);
 const ASSET = "rgb:2dkSTbr-jFhznbPmo-TQafzswCN-av4gTsJjX-ttx6CNou5-M98k8Zd";
@@ -17,24 +17,36 @@ const state = (s: string, attempt?: number) =>
   raw("TASK_STATE", { task_id: TASK, state: s, ...(attempt ? { attempt } : {}) });
 
 export const MOCK_WORKER_ID = WORKER;
+const ROOT_DATA = {
+  version: "verdict-cap/0",
+  cap_id: "cap_0123456789abcdef",
+  issuer: BUYER,
+  subject: "buyer-agent-01",
+  asset_id: ASSET,
+  max_total: "5.00",
+  max_per_task: "2.00",
+  allowed_actions: ["task_payment"],
+  allowed_categories: ["code"],
+  counterparties: "preapproved_workers",
+  allowed_payees: [WORKER],
+  recurring: false,
+  expires_at: inMinutes(11 * 60 + 42),
+  parent: null,
+  signature: `0x${"1".repeat(130)}`,
+};
+/** Root hash exactly as the store computes it, so child capabilities point at the real mandate. */
+export const MOCK_ROOT_HASH = (() => {
+  const e = uiEventSchema.parse({
+    seq: 0,
+    at: "2026-10-18T15:40:00Z",
+    type: "CAP_ROOT",
+    data: ROOT_DATA,
+  });
+  if (e.type !== "CAP_ROOT") throw new Error("mock root missing");
+  return capabilityHash(e.data);
+})();
 const rawEvents: unknown[] = [
-  raw("CAP_ROOT", {
-    version: "verdict-cap/0",
-    cap_id: "cap_0123456789abcdef",
-    issuer: BUYER,
-    subject: "buyer-agent-01",
-    asset_id: ASSET,
-    max_total: "5.00",
-    max_per_task: "2.00",
-    allowed_actions: ["task_payment"],
-    allowed_categories: ["code"],
-    counterparties: "preapproved_workers",
-    allowed_payees: [WORKER],
-    recurring: false,
-    expires_at: inMinutes(11 * 60 + 42),
-    parent: null,
-    signature: `0x${"1".repeat(130)}`,
-  }),
+  raw("CAP_ROOT", ROOT_DATA),
   state("MANDATE_SIGNED"),
   raw("BUDGET_UPDATED", {
     cap_id: "cap_0123456789abcdef",
@@ -45,7 +57,7 @@ const rawEvents: unknown[] = [
   raw("CAP_CHILD", {
     version: "verdict-cap/0",
     cap_id: "cap_fedcba9876543210",
-    parent: h("d"),
+    parent: MOCK_ROOT_HASH,
     issuer: BUYER,
     subject: "buyer-agent-01",
     asset_id: ASSET,

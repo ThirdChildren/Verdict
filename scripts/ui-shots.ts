@@ -100,6 +100,14 @@ const EXTRAS: Extra[] = [
     },
   },
   { id: "wizard-signed", scene: "empty", act: (p) => wizard(p, EXAMPLE, 2) },
+  // Mandate history: select the retired mandate (frozen figures, read-only NEW TASK).
+  {
+    id: "mandates-history",
+    scene: "mandates-history",
+    act: async (p) => {
+      await p.getByRole("navigation", { name: "Mandates" }).getByRole("button").nth(1).click();
+    },
+  },
 ];
 
 async function waitForServer(vite: ChildProcess): Promise<void> {

@@ -11,6 +11,8 @@ export const SHORTCUTS: { key: string; what: string }[] = [
   { key: "n", what: "New task" },
   { key: "j", what: "Next task" },
   { key: "k", what: "Previous task" },
+  { key: "[", what: "Previous mandate (up the list)" },
+  { key: "]", what: "Next mandate (down the list)" },
   { key: "i", what: "Inspector (proof and raw messages)" },
   { key: "a", what: "Agents (what each agent decided and produced; press again to close)" },
   { key: "m", what: "Your mandate" },

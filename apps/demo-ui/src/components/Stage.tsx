@@ -31,6 +31,8 @@ export function Stage(props: {
     ? state.blocks.find((b) => `block:${b.seq}` === key)
     : null;
   const task = key && !block ? state.tasks[key] : undefined;
+  const sel = state.selectedMandate ? state.mandates.get(state.selectedMandate) : undefined;
+  const readOnly = sel !== undefined && sel.status === "retired";
   if (block)
     return (
       <BlockedScene
@@ -42,9 +44,11 @@ export function Stage(props: {
   if (!key || !task)
     return (
       <p className="text-xl text-muted-foreground">
-        {state.root
-          ? "Pick a task on the left, or start a new one. Each step of its journey shows up here."
-          : "Create a mandate first."}
+        {!state.root
+          ? "Create a mandate first."
+          : readOnly
+            ? "This mandate is retired. Its tasks stay listed on the left; nothing new can start under it."
+            : "Pick a task on the left, or start a new one. Each step of its journey shows up here."}
       </p>
     );
   return (

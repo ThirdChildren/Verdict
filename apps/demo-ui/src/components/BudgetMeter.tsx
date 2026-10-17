@@ -36,7 +36,17 @@ export function segmentWidths(b: BudgetView, precision: number): Record<string, 
 }
 
 /** The budget as one ledger line in mono (PAID 1.20 · LOCKED 0.00 · LEFT 3.80 / 5.00 tUSD) and a plain 4px rule. */
-export function BudgetMeter({ state }: { state: AppState }) {
+export function BudgetMeter({
+  state,
+  ceiling,
+  frozenAt,
+}: {
+  state: AppState;
+  /** Ceiling of the shown mandate when it is not the live root. */
+  ceiling?: string;
+  /** Retirement time (HH:MM:SS) of a frozen mandate: its figures do not move. */
+  frozenAt?: string;
+}) {
   const b = state.budget;
   if (!state.root) {
     return <div className="flex-1" />;
@@ -66,7 +76,7 @@ export function BudgetMeter({ state }: { state: AppState }) {
             </span>
           ))}
           <span className="hidden text-xs text-subtle min-[1360px]:inline">
-            / {state.root.max_total} tUSD
+            / {ceiling ?? state.root.max_total} tUSD
           </span>
         </p>
       </TooltipProvider>
@@ -75,7 +85,7 @@ export function BudgetMeter({ state }: { state: AppState }) {
         role="img"
         aria-label={
           b
-            ? `Paid ${b.committed}, locked ${b.reserved}, left ${b.remaining} of ${state.root.max_total} tUSD`
+            ? `Paid ${b.committed}, locked ${b.reserved}, left ${b.remaining} of ${ceiling ?? state.root.max_total} tUSD`
             : "Budget amounts not reported yet"
         }
       >
@@ -84,7 +94,12 @@ export function BudgetMeter({ state }: { state: AppState }) {
             <div key={s.key} className={s.bar} style={{ width: `${w[s.key]}%` }} />
           ))}
       </div>
-      {state.confirming.length > 0 && (
+      {frozenAt && (
+        <p className="mt-1 font-mono text-xs uppercase">
+          <span aria-hidden>□ </span>At retirement {frozenAt}
+        </p>
+      )}
+      {!frozenAt && state.confirming.length > 0 && (
         <p role="status" className="mt-1 text-sm font-semibold">
           <span aria-hidden>▲ </span>
           Payment being confirmed: the amount stays held until the wallet reports.

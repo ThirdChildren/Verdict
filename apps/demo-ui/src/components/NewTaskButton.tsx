@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "../lib/api.js";
+import { readOnlyReason } from "../lib/mandates.js";
 import { fromMinor, toMinor } from "../lib/money.js";
 import { useStartTask } from "../lib/queries.js";
 import {
@@ -30,8 +31,10 @@ export function newTaskBlocker(
   hasRoot: boolean,
   remaining: string | null,
   precision: number,
+  readOnly: string | null = null,
 ): string | null {
   if (!hasRoot) return "Sign a mandate first. A new task needs an active mandate.";
+  if (readOnly) return readOnly;
   if (remaining !== null && toMinor(remaining, precision) === 0n)
     return `The mandate budget is used up (${fromMinor(0n, precision)} tUSD remaining). Sign a new mandate to continue.`;
   return null;
@@ -67,7 +70,10 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [failure, setFailure] = useState<string | null>(null);
   // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
   const remaining = budget?.remaining ?? root?.max_total ?? "0";
-  const blocker = newTaskBlocker(root !== null, budget?.remaining ?? null, precision);
+  const readOnly = useStore((s) =>
+    readOnlyReason(s.selectedMandate ? s.mandates.get(s.selectedMandate) : undefined, Date.now()),
+  );
+  const blocker = newTaskBlocker(root !== null, budget?.remaining ?? null, precision, readOnly);
   const schema = useMemo(() => taskFormSchema(remaining, precision), [remaining, precision]);
   const form = useForm<TaskForm>({
     resolver: zodResolver(schema),

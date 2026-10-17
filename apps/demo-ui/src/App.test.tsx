@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -63,7 +63,9 @@ describe("App in mock mode", () => {
     await userEvent.click(screen.getByRole("button", { name: /approve and sign/i }));
     expect(await screen.findByText(/signed by the principal/i)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /start working/i }));
-    expect((await screen.findAllByText(/mandate retired/i)).length).toBeGreaterThan(0);
+    const list = await screen.findByRole("navigation", { name: "Mandates" });
+    expect(within(list).getByText(/retired/i)).toBeTruthy();
+    expect(within(list).getAllByRole("button")).toHaveLength(2);
   });
   it("mock first mandate: signing puts the mandate on screen and n opens New task", async () => {
     render(
@@ -145,5 +147,55 @@ describe("App in mock mode", () => {
     });
     await userEvent.keyboard("d");
     expect(screen.queryByRole("complementary", { name: "Demo console" })).toBeNull();
+  });
+});
+
+describe("mandate history in mock mode", () => {
+  const mount = async () => {
+    render(
+      <Root>
+        <App />
+      </Root>,
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Storyboard"), "mandates-history");
+    return screen.findByRole("navigation", { name: "Mandates" });
+  };
+  it("lists both mandates newest first, rebuilt from the mock API, and scopes the rail to the active one", async () => {
+    const list = await mount();
+    await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(2));
+    const [b, a] = within(list).getAllByRole("button");
+    expect(b?.textContent).toMatch(/02.*ACTIVE.*1 task.*5\.00 · 2\.00\/task/);
+    expect(a?.textContent).toMatch(/01.*RETIRED.*2 tasks.*5\.00/);
+    expect(b?.getAttribute("aria-current")).toBe("true");
+    const rail = screen.getByRole("navigation", { name: "Tasks" });
+    expect(within(rail).getAllByRole("button")).toHaveLength(1);
+  });
+  it("a retired mandate is read-only: its tasks and frozen figures show, NEW TASK says why", async () => {
+    const list = await mount();
+    await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(2));
+    await userEvent.click(within(list).getAllByRole("button")[1] as HTMLElement);
+    const rail = screen.getByRole("navigation", { name: "Tasks" });
+    expect(within(rail).getAllByRole("button")).toHaveLength(2);
+    expect(within(rail).getByText("Paid")).toBeTruthy();
+    expect(within(rail).getByText("Refunded")).toBeTruthy();
+    expect(screen.getByText(/At retirement/)).toBeTruthy();
+    const newTask = screen.getByRole("button", { name: "New task" }) as HTMLButtonElement;
+    expect(newTask.disabled).toBe(true);
+    expect(
+      screen.getByText("This mandate is retired. Select the active one or create a new mandate."),
+    ).toBeTruthy();
+    await userEvent.click(document.body);
+    // The key does nothing while the mandate is read-only.
+    await userEvent.keyboard("n");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("[ and ] move between mandates", async () => {
+    const list = await mount();
+    await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(2));
+    await userEvent.click(document.body);
+    await userEvent.keyboard("]");
+    expect(within(list).getAllByRole("button")[1]?.getAttribute("aria-current")).toBe("true");
+    await userEvent.keyboard("[[");
+    expect(within(list).getAllByRole("button")[0]?.getAttribute("aria-current")).toBe("true");
   });
 });

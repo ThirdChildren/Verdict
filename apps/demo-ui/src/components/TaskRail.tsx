@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { stoppedIds, useNow } from "../lib/stopped.js";
 import { type RailRow, railRows } from "../lib/view.js";
 import { type AppState, useStore } from "../store.js";
@@ -35,19 +35,32 @@ export function TaskRail(props: {
   state: AppState;
   descriptions: Record<string, string>;
   newTask: ReactNode;
+  /** The mandates list, shown between NEW TASK and the rail. */
+  mandates?: ReactNode;
   live?: Live | null;
 }) {
   const locked = Object.values(props.state.tasks).some((t) => t.state === "ESCROW_LOCKED");
   const now = useNow(locked);
-  const rows = railRows(
-    props.state,
-    props.descriptions,
-    stoppedIds(props.state, now, props.live ?? null),
+  const stopped = stoppedIds(props.state, now, props.live ?? null);
+  const stoppedKey = [...stopped].sort().join(",");
+  // Rebuilt only when the scoped tasks, blocks, descriptions or stopped set change: a budget or worker frame
+  // leaves all of them untouched.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stopped` is covered by `stoppedKey`; the state's other fields do not feed the rows
+  const rows = useMemo(
+    () => railRows(props.state, props.descriptions, stopped),
+    [
+      props.state.tasks,
+      props.state.blocks,
+      props.state.retirements,
+      props.descriptions,
+      stoppedKey,
+    ],
   );
   const selected = props.state.selected;
   return (
     <div className="flex h-full flex-col gap-4">
       {props.newTask}
+      {props.mandates}
       <nav aria-label="Tasks" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           {rows.length === 0 ? (

@@ -11,6 +11,7 @@ import { BlockNotice } from "./components/BlockNotice.js";
 import { DemoConsole } from "./components/DemoConsole.js";
 import { EmptyState } from "./components/EmptyState.js";
 import { Inspector } from "./components/Inspector.js";
+import { MandateList, mandateNeighbour, sortedMandates } from "./components/MandateList.js";
 import { MandateSummary } from "./components/MandateSummary.js";
 import { MandateWizard } from "./components/MandateWizard.js";
 import { MockBanner } from "./components/MockBanner.js";
@@ -23,13 +24,17 @@ import { TopBar } from "./components/TopBar.js";
 import { useLiveStream } from "./components/WorkerLane.js";
 import { connectEngine } from "./connect.js";
 import { demoConsole, registerConsole } from "./lib/console.js";
+import { hydrateFromApi } from "./lib/hydrate.js";
+import { clockHms } from "./lib/mandates.js";
 import { isMock } from "./lib/mode.js";
 import { isFreshBlock, shouldToastBlock } from "./lib/notify.js";
 import { usePresenter } from "./lib/presenter.js";
 import { useDemoToggles, useDescriptions } from "./lib/queries.js";
+import { isFrozen, useScoped } from "./lib/scope.js";
 import { useMedia } from "./lib/useMedia.js";
 import { useShortcuts } from "./lib/useShortcuts.js";
 import { railRows } from "./lib/view.js";
+import { setMockHistory } from "./mock/api.js";
 import { MOCK_PAYEE_NAMES } from "./mock/events.js";
 import { startMock } from "./mock/player.js";
 import { PLAY, SCENES } from "./mock/storyboard.js";
@@ -38,7 +43,8 @@ import { useStore } from "./store.js";
 const mock = isMock();
 
 export function App() {
-  const state = useStore();
+  const raw = useStore();
+  const state = useScoped(raw);
   const [attempt, setAttempt] = useState(0);
   const [sceneId, setSceneId] = useState(PLAY);
   const { toggle: toggleTheme } = useTheme();
@@ -70,6 +76,9 @@ export function App() {
     const st = useStore.getState();
     for (const svc of ["engine", "worker", "verifier"] as const) st.setConnection(svc, "mock");
     for (const e of scene.events) st.apply(e);
+    // Same path as a real reload: the list and the task -> mandate links come from the (mock) API.
+    setMockHistory(scene.history ?? null);
+    void hydrateFromApi();
   }, [attempt, sceneId]);
   const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
   const descriptions = useDescriptions();
@@ -81,6 +90,11 @@ export function App() {
       const k = neighbour(railRows(st), st.selected, dir);
       if (k) st.select(k);
     };
+    const stepMandate = (dir: 1 | -1) => () => {
+      const st = useStore.getState();
+      const k = mandateNeighbour(sortedMandates(st.mandates), st.selectedMandate, dir);
+      if (k && k !== st.selectedMandate) st.selectMandate(k);
+    };
     return {
       n: () => (hasRoot ? setNewTaskSignal((v) => v + 1) : setWizardOpen(true)),
       Escape: () => {
@@ -89,6 +103,8 @@ export function App() {
       },
       j: move(1),
       k: move(-1),
+      "[": stepMandate(-1),
+      "]": stepMandate(1),
       i: () => setInspector((v) => !v),
       a: () => setAgentsOpen(true),
       m: () => (hasRoot ? setMandateOpen(true) : setWizardOpen(true)),
@@ -119,6 +135,14 @@ export function App() {
   useEffect(() => {
     if (onBlockRow) setBlockNotice(false);
   }, [onBlockRow]);
+  const selRow = raw.selectedMandate ? raw.mandates.get(raw.selectedMandate) : undefined;
+  const shown =
+    selRow && selRow.hash !== raw.rootHash && selRow.ceiling
+      ? {
+          ceiling: selRow.ceiling,
+          ...(isFrozen(selRow) ? { frozenAt: clockHms(selRow.retired_at) } : {}),
+        }
+      : undefined;
   const down = !mock && state.connections.engine === "disconnected";
   return (
     <div className="flex h-screen flex-col bg-background text-base text-foreground">
@@ -138,6 +162,7 @@ export function App() {
         }}
         onToggleInspector={() => setInspector((v) => !v)}
         onAgents={() => setAgentsOpen(true)}
+        {...(shown ? { shown } : {})}
       />
       <div className="flex min-h-0 flex-1">
         {state.root && (
@@ -147,6 +172,7 @@ export function App() {
               descriptions={descriptions}
               live={live}
               newTask={<NewTaskButton openSignal={newTaskSignal} />}
+              mandates={<MandateList />}
             />
           </aside>
         )}

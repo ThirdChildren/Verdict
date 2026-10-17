@@ -27,6 +27,7 @@ import {
 import { BLOCK_TITLES } from "../lib/blocks.js";
 import { buyerFacts } from "../lib/buyerApi.js";
 import { eventsFor } from "../lib/events.js";
+import { useScoped } from "../lib/scope.js";
 import { workLog } from "../lib/workLog.js";
 import { type AppState, useStore } from "../store.js";
 import { Hash, middle } from "./Hash.js";
@@ -447,7 +448,7 @@ export function AgentsPanel(props: {
   mock: boolean;
   descriptions: Record<string, string>;
 }) {
-  const state = useStore();
+  const state = useScoped(useStore());
   const { open, onOpenChange } = props;
   useEffect(() => {
     if (!open) return;

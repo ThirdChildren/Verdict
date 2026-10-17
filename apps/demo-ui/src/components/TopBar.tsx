@@ -19,6 +19,8 @@ export function TopBar(props: {
   onNewMandate: () => void;
   onToggleInspector: () => void;
   onAgents: () => void;
+  /** The selected mandate when it is not the live root. */
+  shown?: { ceiling: string; frozenAt?: string };
 }) {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
@@ -30,8 +32,20 @@ export function TopBar(props: {
           regtest · tUSD
         </span>
       </div>
-      <BudgetMeter state={props.state} />
-      <MandatePill root={props.root} onClick={props.onMandate} />
+      <BudgetMeter
+        state={props.state}
+        {...(props.shown ? { ceiling: props.shown.ceiling } : {})}
+        {...(props.shown?.frozenAt ? { frozenAt: props.shown.frozenAt } : {})}
+      />
+      <MandatePill
+        root={props.root}
+        onClick={props.onMandate}
+        selected={
+          props.state.selectedMandate
+            ? props.state.mandates.get(props.state.selectedMandate)
+            : undefined
+        }
+      />
       {props.root && (
         <WordButton
           className="text-xs tracking-wide uppercase"

@@ -1,6 +1,7 @@
 import { BLOCK_CODES, type BlockCode, verdictRecordSchema } from "@verdict/protocol";
 import { z } from "zod";
 import * as mock from "../mock/api.js";
+import { type MandateRow, parseMandates, parseTaskRoots } from "./mandates.js";
 import { isMock } from "./mode.js";
 import { fetchWorkerDelivery } from "./workerApi.js";
 
@@ -279,7 +280,14 @@ export async function fetchChain(): Promise<Chain> {
 }
 
 export const taskListSchema = z.object({
-  tasks: z.array(z.object({ task_id: z.string(), description: z.string(), amount: z.string() })),
+  tasks: z.array(
+    z.object({
+      task_id: z.string(),
+      description: z.string(),
+      amount: z.string(),
+      root_hash: z.string().nullish(),
+    }),
+  ),
 });
 export type TaskList = z.infer<typeof taskListSchema>;
 
@@ -290,6 +298,18 @@ export async function fetchTasks(): Promise<TaskList> {
   if (!r.success)
     throw new ApiError("BAD_RESPONSE", "The engine sent a task list this screen cannot read.");
   return r.data;
+}
+
+/** GET /api/mandates, newest first. Bad rows are skipped (see parseMandates). */
+export async function fetchMandates(): Promise<MandateRow[]> {
+  if (isMock()) return parseMandates(await mock.fetchMandatesJson());
+  return parseMandates(await getJson(`${engineBase()}/api/mandates`));
+}
+
+/** Task id -> mandate root hash, from GET /api/tasks. */
+export async function fetchTaskRoots(): Promise<Record<string, string>> {
+  if (isMock()) return parseTaskRoots(await mock.fetchTasksJson());
+  return parseTaskRoots(await getJson(`${engineBase()}/api/tasks`));
 }
 
 /** Whether the engine was started with the demo switches (VERDICT_DEMO_TOGGLES=1). Any failure means "not available". */

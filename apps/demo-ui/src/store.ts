@@ -7,12 +7,16 @@ import type {
   UiEvent,
   VerdictRecord,
 } from "@verdict/protocol";
+import { capabilityHash } from "@verdict/protocol";
 import { create } from "zustand";
+import type { MandateRow } from "./lib/mandates.js";
 import type { MineProgress } from "./lib/mine.js";
 import { precisionOf } from "./lib/money.js";
 import type { MandateRetired } from "./lib/retired.js";
+import { mandateOfBlock, scopeLists } from "./lib/scope.js";
 import { flowFor, stepForState } from "./lib/steps.js";
 import { workerStoppedHint } from "./lib/stopped.js";
+import { railRows } from "./lib/view.js";
 
 export type Service = "engine" | "worker" | "verifier";
 export type ConnStatus = "connecting" | "connected" | "disconnected" | "mock";
@@ -92,6 +96,16 @@ export interface AppState {
   mine: Record<string, MineProgress>;
   /** Retired mandates, newest first (engine MANDATE_RETIRED, outside the protocol event stream). */
   retirements: Retirement[];
+  /** Every mandate seen, by root hash (rebuilt from the API on connect, then kept current by events). Never mutated. */
+  mandates: Map<string, MandateRow>;
+  /** The mandate whose tasks and figures the screen shows (root hash). */
+  selectedMandate: string | null;
+  /** Hash of the live (newest) root, computed from its CAP_ROOT event. */
+  rootHash: string | null;
+  /** Task id -> root hash. The ledger's answer (API) wins over what events implied. */
+  taskRoots: Record<string, string>;
+  /** Child capability id -> parent root hash (from CAP_CHILD). */
+  capParents: Record<string, string>;
 }
 
 export const initialState: AppState = {
@@ -116,7 +130,40 @@ export const initialState: AppState = {
   selected: null,
   mine: {},
   retirements: [],
+  mandates: new Map(),
+  selectedMandate: null,
+  rootHash: null,
+  taskRoots: {},
+  capParents: {},
 };
+
+const lazyRow = (hash: string, order: number): MandateRow => ({
+  hash,
+  cap_id: "",
+  status: "active",
+  ceiling: "",
+  per_task: "",
+  expires_at: "",
+  created_at: null,
+  retired_at: null,
+  figures: null,
+  tasks: null,
+  order,
+});
+const nextOrder = (m: Map<string, MandateRow>) =>
+  Math.max(0, ...[...m.values()].map((r) => r.order)) + 1;
+
+/** Marks a mandate retired and freezes the figures the screen last had for it. */
+function freeze(row: MandateRow, s: AppState, at: string): MandateRow {
+  if (row.status === "retired" && row.figures) return row;
+  const b = s.budget && s.budget.cap_id === row.cap_id ? s.budget : null;
+  return {
+    ...row,
+    status: "retired",
+    retired_at: row.retired_at ?? at,
+    figures: b ? { paid: b.committed, locked: b.reserved, left: b.remaining } : row.figures,
+  };
+}
 
 function blank(s: AppState, prev: TaskView | undefined, seq = 0): TaskView {
   return (
@@ -158,16 +205,40 @@ export function reduce(s: AppState, e: UiEvent): AppState {
     events: e.type === "WORKER_STREAM" ? s.events : [e, ...s.events].slice(0, EVENT_LOG_MAX),
   };
   switch (e.type) {
-    case "CAP_ROOT":
+    case "CAP_ROOT": {
       // A different root is a new mandate: its numbers arrive with its own BUDGET_UPDATED, never the old ones.
+      const hash = capabilityHash(e.data);
+      const mandates = new Map(s.mandates);
+      const prevLive = s.rootHash && s.rootHash !== hash ? mandates.get(s.rootHash) : undefined;
+      if (prevLive) mandates.set(prevLive.hash, freeze(prevLive, s, e.at));
+      const known = mandates.get(hash);
+      mandates.set(hash, {
+        ...(known ?? lazyRow(hash, nextOrder(mandates))),
+        cap_id: e.data.cap_id,
+        status: known?.status === "retired" ? "retired" : "active",
+        ceiling: e.data.max_total,
+        per_task: e.data.max_per_task ?? "",
+        expires_at: e.data.expires_at,
+        created_at: known?.created_at ?? e.at,
+      });
       return {
         ...next,
         root: e.data,
+        rootHash: hash,
+        mandates,
+        // A new root is selected on creation (the old one stays in the list, read-only).
+        selectedMandate: hash,
+        selected: s.selectedMandate === hash ? s.selected : null,
         precision: precisionOf(e.data.max_total),
         budget: s.root && s.root.cap_id !== e.data.cap_id ? null : s.budget,
       };
+    }
     case "CAP_CHILD":
-      return { ...next, child: e.data };
+      return {
+        ...next,
+        child: e.data,
+        capParents: { ...s.capParents, [e.data.cap_id]: e.data.parent },
+      };
     case "BLOCKED": {
       const cur = s.currentTask ? s.tasks[s.currentTask] : undefined;
       return {
@@ -184,11 +255,23 @@ export function reduce(s: AppState, e: UiEvent): AppState {
           ...s.blocks,
         ],
         selected: blockKey(e.seq),
+        selectedMandate: mandateOfBlock(s, e.data) ?? s.selectedMandate,
         tasks: cur ? { ...s.tasks, [s.currentTask as string]: { ...cur, blocked: true } } : s.tasks,
       };
     }
     case "TASK_STATE": {
       const prev = s.tasks[e.data.task_id];
+      // A task's mandate is fixed when it is first seen: the live root (only it can start tasks).
+      const home = prev ? null : (s.rootHash ?? s.child?.parent ?? null);
+      const links =
+        home && !s.taskRoots[e.data.task_id]
+          ? {
+              taskRoots: { ...s.taskRoots, [e.data.task_id]: home },
+              mandates: s.mandates.has(home)
+                ? s.mandates
+                : new Map(s.mandates).set(home, lazyRow(home, nextOrder(s.mandates))),
+            }
+          : {};
       if (e.data.state === "BLOCKED") {
         const view: TaskView = {
           ...blank(s, prev, e.seq),
@@ -199,6 +282,7 @@ export function reduce(s: AppState, e: UiEvent): AppState {
         };
         return {
           ...next,
+          ...links,
           currentTask: e.data.task_id,
           tasks: { ...s.tasks, [e.data.task_id]: view },
         };
@@ -221,9 +305,11 @@ export function reduce(s: AppState, e: UiEvent): AppState {
       };
       return {
         ...next,
+        ...links,
         currentTask: e.data.task_id,
         tasks: { ...s.tasks, [e.data.task_id]: view },
         selected: prev ? s.selected : e.data.task_id,
+        selectedMandate: prev ? s.selectedMandate : (home ?? s.selectedMandate),
       };
     }
     case "PAYMENT_STATUS": {
@@ -280,6 +366,9 @@ interface Actions {
   select: (key: string) => void;
   setMine: (p: MineProgress) => void;
   retire: (r: MandateRetired) => void;
+  /** Rebuilds the mandate map and the task -> mandate links from the API (newest mandate first). */
+  hydrate: (rows: MandateRow[], taskRoots: Record<string, string>) => void;
+  selectMandate: (hash: string) => void;
   reset: () => void;
 }
 export const useStore = create<AppState & Actions>((set) => ({
@@ -291,11 +380,47 @@ export const useStore = create<AppState & Actions>((set) => ({
   select: (key) => set({ selected: key }),
   setMine: (p) => set((s) => ({ mine: { ...s.mine, [p.task_id]: p } })),
   retire: (r) =>
-    set((s) => ({
-      retirements: [
-        { ...r, afterSeq: s.lastSeq, receivedAt: r.at ?? new Date().toISOString() },
-        ...s.retirements,
-      ],
-    })),
+    set((s) => {
+      const mandates = new Map(s.mandates);
+      const at = r.at ?? new Date().toISOString();
+      for (const id of r.retired) {
+        const row = mandates.get(id) ?? [...mandates.values()].find((m) => m.cap_id === id);
+        if (row) mandates.set(row.hash, freeze(row, s, at));
+      }
+      return {
+        mandates,
+        retirements: [
+          { ...r, afterSeq: s.lastSeq, receivedAt: r.at ?? new Date().toISOString() },
+          ...s.retirements,
+        ],
+      };
+    }),
+  hydrate: (rows, taskRoots) =>
+    set((s) => {
+      const mandates = new Map<string, MandateRow>();
+      for (const r of rows) {
+        const live = s.mandates.get(r.hash);
+        mandates.set(r.hash, live?.status === "retired" ? { ...r, status: "retired" } : r);
+      }
+      let order = Math.max(0, ...rows.map((r) => r.order));
+      for (const r of [...s.mandates.values()].sort((a, b) => a.order - b.order))
+        if (!mandates.has(r.hash)) mandates.set(r.hash, { ...r, order: ++order });
+      const first = [...mandates.values()].sort((a, b) => b.order - a.order);
+      const pick =
+        s.selectedMandate && mandates.has(s.selectedMandate)
+          ? s.selectedMandate
+          : ((first.find((r) => r.status === "active") ?? first[0])?.hash ?? null);
+      return {
+        mandates,
+        taskRoots: { ...s.taskRoots, ...taskRoots },
+        selectedMandate: pick,
+      };
+    }),
+  selectMandate: (hash) =>
+    set((s) => {
+      const lists = scopeLists({ ...s }, hash);
+      const top = railRows({ ...s, ...lists })[0]?.key ?? null;
+      return { selectedMandate: hash, selected: top };
+    }),
   reset: () => set({ ...initialState }),
 }));
