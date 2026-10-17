@@ -6,6 +6,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { AgentsPanel } from "./components/AgentsPanel.js";
 import { BlockNotice } from "./components/BlockNotice.js";
 import { DemoConsole } from "./components/DemoConsole.js";
 import { EmptyState } from "./components/EmptyState.js";
@@ -45,6 +46,7 @@ export function App() {
   const [mandateOpen, setMandateOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [blockNotice, setBlockNotice] = useState(false);
   const demoEnabled = useDemoToggles();
@@ -82,6 +84,7 @@ export function App() {
       j: move(1),
       k: move(-1),
       i: () => setInspector((v) => !v),
+      a: () => setAgentsOpen(true),
       m: () => (hasRoot ? setMandateOpen(true) : setWizardOpen(true)),
       d: () => demoConsole.open?.(),
       p: togglePresenter,
@@ -124,6 +127,7 @@ export function App() {
         onReconnect={reconnect}
         onMandate={() => (state.root ? setMandateOpen(true) : setWizardOpen(true))}
         onToggleInspector={() => setInspector((v) => !v)}
+        onAgents={() => setAgentsOpen(true)}
       />
       <div className="flex min-h-0 flex-1">
         {state.root && (
@@ -180,6 +184,12 @@ export function App() {
           </SheetContent>
         </Sheet>
       )}
+      <AgentsPanel
+        open={agentsOpen}
+        onOpenChange={setAgentsOpen}
+        mock={mock}
+        descriptions={descriptions}
+      />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
       <MandateWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       {state.root && (

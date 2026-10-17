@@ -49,6 +49,19 @@ export async function fetchEvidence(taskId: string): Promise<Evidence> {
     contract_sha256: contractHash(contract),
     delivery: { files, sha256: dh },
     verdict,
+    intent: {
+      kind: "task_payment",
+      category: "code",
+      counterparty: `eip191:0x${"b".repeat(40)}`,
+      amount: "1.20",
+      recurring: false,
+      interval: null,
+      task_spec: "Convert a CSV file into JSON",
+      deadline: "2026-10-18T17:00:00Z",
+      rationale:
+        "The job fits the 1.20 tUSD per-task limit and the worker is on the approved list.",
+    },
+    intent_sha256: "e".repeat(64),
   };
 }
 

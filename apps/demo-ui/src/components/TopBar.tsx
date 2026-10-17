@@ -17,6 +17,7 @@ export function TopBar(props: {
   onReconnect: () => void;
   onMandate: () => void;
   onToggleInspector: () => void;
+  onAgents: () => void;
 }) {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
@@ -60,6 +61,14 @@ export function TopBar(props: {
           title="Switch light / dark theme (t)"
         >
           Theme
+        </WordButton>
+        <WordButton
+          className="text-xs tracking-wide"
+          onClick={props.onAgents}
+          aria-label="Agents: what each agent did"
+          title="What each agent decided and produced (a)"
+        >
+          Agents
         </WordButton>
         <WordButton
           className="text-xs tracking-wide"

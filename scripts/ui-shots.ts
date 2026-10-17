@@ -51,6 +51,8 @@ const EXTRAS: Extra[] = [
       await p.locator("summary").first().click();
     },
   },
+  { id: "agents", scene: "settled", act: (p) => p.keyboard.press("a") },
+  { id: "agents-blocked", scene: "blocked", act: (p) => p.keyboard.press("a") },
   { id: "shortcut-help", scene: "working", act: (p) => p.keyboard.press("?") },
   { id: "presenter", scene: "working", act: (p) => p.keyboard.press("p") },
   { id: "wizard-review", scene: "empty", act: (p) => wizard(p, EXAMPLE, 1) },

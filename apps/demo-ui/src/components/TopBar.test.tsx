@@ -21,6 +21,7 @@ const bar = (connections: AppState["connections"]) =>
         onReconnect={() => {}}
         onMandate={() => {}}
         onToggleInspector={() => {}}
+        onAgents={() => {}}
       />
     </ThemeProvider>,
   );

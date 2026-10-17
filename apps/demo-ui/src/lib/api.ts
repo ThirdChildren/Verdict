@@ -223,6 +223,9 @@ export const evidenceSchema = z.object({
     .object({ files: z.array(z.object({ path: z.string(), content: z.string() })), sha256: sha })
     .nullable(),
   verdict: verdictRecordSchema.nullable(),
+  /** Accepted spend intent (needs engine evidence fields `intent` and `intent_sha256`); absent until reported. */
+  intent: z.unknown().optional(),
+  intent_sha256: sha.nullish(),
 });
 export type Evidence = z.infer<typeof evidenceSchema>;
 
