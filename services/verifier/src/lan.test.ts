@@ -7,6 +7,7 @@ const PORT = 7404;
 const service = {
   handle: async () => ({ ok: true }),
   reports: () => [],
+  stats: () => ({ packages: [] }),
 } as unknown as VerifierService;
 
 function lanApp() {
@@ -32,9 +33,9 @@ describe("verifier over the LAN", () => {
     await app.close();
   });
 
-  test("everything else is refused from the LAN (health, verdicts, info)", async () => {
+  test("everything else is refused from the LAN (health, verdicts, stats, info)", async () => {
     const app = lanApp();
-    for (const url of ["/health", "/v0/verdicts", "/v0/info"]) {
+    for (const url of ["/health", "/v0/verdicts", "/v0/verdicts/t1", "/v0/stats", "/v0/info"]) {
       const r = await app.inject({
         method: "GET",
         url,

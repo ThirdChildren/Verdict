@@ -30,6 +30,14 @@ import { fileURLToPath } from "node:url";
 import { resolveDataDir } from "@verdict/identity";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { MAX_DELIVERY_BYTES } from "./extract.js";
+import {
+  expectedVerdict,
+  genericJudgeSha256,
+  judgeAllowList,
+  type ManifestV2,
+  parseManifest,
+  sha256OfFile,
+} from "./manifest.js";
 
 export { extractTarball, MAX_DELIVERY_BYTES } from "./extract.js";
 
@@ -44,11 +52,17 @@ export type RunnerCode =
   | "VERIFY_TIMEOUT"
   | "VERIFY_CRASH"
   | "VERIFY_OUTPUT_INVALID"
+  | "VERIFY_NONDETERMINISTIC"
   | "RUNNER_ERROR";
 
 export interface Check {
   id: string;
   status: "pass" | "fail";
+  /** Format 2 only: what the manifest says about this check (the runner recomputes them, it does not trust the judge). */
+  kind?: string;
+  weight?: number;
+  required?: boolean;
+  ms?: number;
 }
 
 export interface RunResult {
@@ -58,6 +72,13 @@ export interface RunResult {
   sandbox: SandboxKind | "unavailable";
   code?: RunnerCode;
   message: string;
+  /** Format 2 only. */
+  score?: number;
+  min_score?: number;
+  profile?: string;
+  packageId?: string;
+  /** "match": the judge (and, in the full profile, the executor) gave identical output twice. */
+  determinism?: "match" | "mismatch" | "skipped";
 }
 
 export interface RunOptions {
@@ -79,6 +100,9 @@ interface Manifest {
   case_timeout_seconds: number;
   max_output_bytes: number;
 }
+
+// The generic judge is hashed once, when the runner is loaded; format-2 packages must carry a judge on the allow-list.
+genericJudgeSha256();
 
 const MAX_STDOUT_BYTES = 64 * 1024;
 const LIMIT_AS_BYTES = 2 * 1024 ** 3;
@@ -330,6 +354,61 @@ function parseChecks(stdout: string): Check[] | null {
   return out;
 }
 
+interface JudgeLineV2 {
+  id: string;
+  status: "pass" | "fail";
+  required: boolean;
+  weight: number;
+  ms: number;
+}
+interface JudgeVerdictV2 {
+  status: "pass" | "fail";
+  score: number;
+  min_score: number;
+  profile: string;
+}
+
+/** Strict parse of a format-2 judge's output: one line per manifest check, in order, then `_verdict`. */
+function parseJudgeV2(
+  stdout: string,
+  m: ManifestV2,
+): { lines: JudgeLineV2[]; verdict: JudgeVerdictV2 } | null {
+  const raw = stdout.split("\n").filter((l) => l.trim() !== "");
+  if (raw.length !== m.checks.length + 1) return null;
+  const lines: JudgeLineV2[] = [];
+  let verdict: JudgeVerdictV2 | null = null;
+  try {
+    for (const [i, l] of raw.entries()) {
+      const v = JSON.parse(l) as Record<string, unknown> | null;
+      if (typeof v !== "object" || v === null) return null;
+      const status = v.status;
+      if (status !== "pass" && status !== "fail") return null;
+      if (i === m.checks.length) {
+        if (
+          v.id !== "_verdict" ||
+          typeof v.score !== "number" ||
+          typeof v.min_score !== "number" ||
+          typeof v.profile !== "string"
+        )
+          return null;
+        verdict = { status, score: v.score, min_score: v.min_score, profile: v.profile };
+      } else {
+        if (
+          v.id !== m.checks[i]?.id ||
+          typeof v.required !== "boolean" ||
+          typeof v.weight !== "number" ||
+          typeof v.ms !== "number"
+        )
+          return null;
+        lines.push({ id: String(v.id), status, required: v.required, weight: v.weight, ms: v.ms });
+      }
+    }
+  } catch {
+    return null;
+  }
+  return verdict === null ? null : { lines, verdict };
+}
+
 function makeWritable(dir: string): void {
   try {
     chmodSync(dir, 0o755);
@@ -478,8 +557,23 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
     mkdirSync(scratch, { mode: 0o777 });
     chmodSync(scratch, 0o777);
     let manifest: Manifest;
+    let v2: ManifestV2 | null = null;
     try {
       manifest = readManifest(pkg);
+      const parsed = parseManifest(JSON.parse(readFileSync(join(pkg, "manifest.json"), "utf8")));
+      if (!parsed.ok)
+        throw new Error(
+          parsed.issues.map((i) => `${i.path || "manifest"}: ${i.message}`).join("; "),
+        );
+      if (parsed.format === 2) {
+        v2 = parsed.manifest;
+        // No foreign code runs outside the sandbox: the judge must be the one the verifier knows (or one it was told to allow).
+        if (
+          sha256OfFile(join(pkg, "verify.mjs")) !== v2.judge_sha256 ||
+          !judgeAllowList().has(v2.judge_sha256)
+        )
+          throw new Error("judge_sha256 is not a judge this verifier allows");
+      }
     } catch (e) {
       return withhold(
         "PACKAGE_INVALID",
@@ -487,12 +581,24 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
         sandbox,
       );
     }
-    const names = readdirSync(join(pkg, manifest.cases_dir))
-      .filter((f) => f.endsWith(manifest.input_ext))
-      .sort();
+    const isCaseInput = (f: string): boolean =>
+      f.endsWith(manifest.input_ext) &&
+      (v2 === null || (!f.endsWith(v2.expected_ext) && !f.endsWith(v2.output_ext)));
+    const names = readdirSync(join(pkg, manifest.cases_dir)).filter(isCaseInput).sort();
     if (names.length === 0)
       return withhold("PACKAGE_INVALID", "The package has no cases.", sandbox);
+    const cases = names.map((f) => ({ input: f, stem: f.slice(0, -manifest.input_ext.length) }));
     for (const f of names) cpSync(join(pkg, manifest.cases_dir, f), join(inputs, f));
+    // Format 2: the shown cases run too, under the prefix v__ (the judge reads them from there).
+    if (v2?.visible_dir !== undefined) {
+      const vdir = join(pkg, v2.visible_dir);
+      if (!existsSync(vdir))
+        return withhold("PACKAGE_INVALID", "visible_dir does not exist in the package.", sandbox);
+      for (const f of readdirSync(vdir).filter(isCaseInput).sort()) {
+        cpSync(join(vdir, f), join(inputs, `v__${f}`));
+        cases.push({ input: `v__${f}`, stem: `v__${f.slice(0, -manifest.input_ext.length)}` });
+      }
+    }
     lockTree(pkg);
     lockTree(inputs);
     lockTree(del);
@@ -504,48 +610,52 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
     // Each case gets an equal share of 80% of the budget, so a hanging delivery fails its cases instead of starving the judge.
     const perCaseMs = Math.max(
       1000,
-      Math.min(manifest.case_timeout_seconds * 1000, (opts.maxVerifySeconds * 800) / names.length),
+      Math.min(manifest.case_timeout_seconds * 1000, (opts.maxVerifySeconds * 800) / cases.length),
     );
-    for (const f of names) {
-      if (deadline - Date.now() <= 0)
-        return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox);
-      const stem = f.slice(0, -manifest.input_ext.length);
-      const outFile = join(out, `${stem}${manifest.output_ext}`);
-      const fd = openSync(outFile, "w", 0o600);
-      let res: ProcResult;
-      try {
-        const [cmd, args] = sandboxArgv(
-          kind,
-          {
-            delivery: del,
-            inputs,
-            scratch,
-            outputs: out,
-            hide: [
-              realpathSync(opts.packageDir),
-              ...realDirs(resolveDataDir()),
-              ...realDirs(REPO_ROOT),
-            ],
-          },
-          manifest.entry,
-          f,
-          {
-            cpuSeconds: Math.ceil(perCaseMs / 1000),
-            fsizeBytes: manifest.max_output_bytes,
-          },
-        );
-        res = await runChild(cmd, args, {
-          cwd: tmp,
-          env: { PATH: "/usr/bin:/bin", LANG: "C" },
-          stdoutFd: fd,
-          timeoutMs: perCaseMs,
-        });
-      } finally {
-        closeSync(fd);
+    const executeAll = async (outDir: string): Promise<RunResult | null> => {
+      for (const c of cases) {
+        if (deadline - Date.now() <= 0)
+          return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox);
+        const outFile = join(outDir, `${c.stem}${manifest.output_ext}`);
+        const fd = openSync(outFile, "w", 0o600);
+        let res: ProcResult;
+        try {
+          const [cmd, args] = sandboxArgv(
+            kind,
+            {
+              delivery: del,
+              inputs,
+              scratch,
+              outputs: outDir,
+              hide: [
+                realpathSync(opts.packageDir),
+                ...realDirs(resolveDataDir()),
+                ...realDirs(REPO_ROOT),
+              ],
+            },
+            manifest.entry,
+            c.input,
+            {
+              cpuSeconds: Math.ceil(perCaseMs / 1000),
+              fsizeBytes: manifest.max_output_bytes,
+            },
+          );
+          res = await runChild(cmd, args, {
+            cwd: tmp as string,
+            env: { PATH: "/usr/bin:/bin", LANG: "C" },
+            stdoutFd: fd,
+            timeoutMs: perCaseMs,
+          });
+        } finally {
+          closeSync(fd);
+        }
+        // A case that crashed, timed out or was killed has no output: the judge sees a missing file and fails the check.
+        if (res.timedOut || res.code !== 0) unlinkSync(outFile);
       }
-      // A case that crashed, timed out or was killed has no output: the judge sees a missing file and fails the check.
-      if (res.timedOut || res.code !== 0) unlinkSync(outFile);
-    }
+      return null;
+    };
+    const executed = await executeAll(out);
+    if (executed !== null) return executed;
 
     // ---- integrity: nothing the judge trusts may have changed ----
     if (
@@ -555,15 +665,17 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
       return withhold("PACKAGE_TAMPERED", "The verifier package changed during the run.", sandbox);
 
     // ---- judge: outside the sandbox, never loads delivery code ----
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox);
     const nodeDir = dirname(process.execPath);
-    const res = await runChild(process.execPath, [join(pkg, "verify.mjs"), del, out], {
-      cwd: tmp,
-      env: { PATH: [nodeDir, "/usr/bin", "/bin"].join(delimiter), LANG: "C" },
-      stdoutFd: "pipe",
-      timeoutMs: remaining,
-    });
+    const judgeOnce = (outDir: string): Promise<ProcResult> =>
+      runChild(process.execPath, [join(pkg, "verify.mjs"), del, outDir], {
+        cwd: tmp as string,
+        env: { PATH: [nodeDir, "/usr/bin", "/bin"].join(delimiter), LANG: "C" },
+        stdoutFd: "pipe",
+        timeoutMs: Math.max(1, deadline - Date.now()),
+      });
+    if (deadline - Date.now() <= 0)
+      return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox);
+    const res = await judgeOnce(out);
     if ((await dirHashFromDisk(pkg)) !== pkgBefore)
       return withhold("PACKAGE_TAMPERED", "The verifier package changed during the run.", sandbox);
 
@@ -571,6 +683,126 @@ export async function runVerification(opts: RunOptions): Promise<RunResult> {
       return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox, res.code);
     if (res.overflow)
       return withhold("VERIFY_OUTPUT_INVALID", "Verifier output too large.", sandbox, res.code);
+
+    if (v2 !== null) {
+      const profile = v2.profiles[v2.profile];
+      const judged = parseJudgeV2(res.stdout, v2);
+      if (profile === undefined || judged === null)
+        return withhold(
+          "VERIFY_OUTPUT_INVALID",
+          "Verifier output could not be parsed.",
+          sandbox,
+          res.code,
+        );
+      // The runner does not trust the judge's arithmetic: it recomputes from the manifest it hashed.
+      const exp = expectedVerdict(
+        v2,
+        judged.lines.map((l) => ({ id: l.id, status: l.status })),
+      );
+      const agrees =
+        judged.verdict.score === exp.score &&
+        judged.verdict.min_score === profile.min_score &&
+        judged.verdict.profile === v2.profile &&
+        (judged.verdict.status === "pass") === exp.pass &&
+        judged.lines.every(
+          (l) => l.required === exp.required[l.id] && l.weight === exp.weight[l.id],
+        );
+      if (!agrees)
+        return withhold(
+          "VERIFY_OUTPUT_INVALID",
+          "The judge's verdict disagrees with the runner's recomputation.",
+          sandbox,
+          res.code,
+        );
+
+      // Determinism: the judge twice on the same outputs; the full profile also re-runs the executor when at least half the budget remains.
+      let determinism: "match" | "mismatch" = "match";
+      const second = await judgeOnce(out);
+      if (second.timedOut)
+        return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox, second.code);
+      if (second.stdout !== res.stdout || second.code !== res.code) determinism = "mismatch";
+      if (
+        determinism === "match" &&
+        profile.determinism === "full" &&
+        deadline - Date.now() >= (opts.maxVerifySeconds * 1000) / 2
+      ) {
+        const out2 = join(tmp, "out2");
+        mkdirSync(out2, { mode: 0o700 });
+        const again = await executeAll(out2);
+        if (again !== null) return again;
+        const third = await judgeOnce(out2);
+        if (third.timedOut)
+          return withhold("VERIFY_TIMEOUT", "Verification timed out.", sandbox, third.code);
+        if (third.stdout !== res.stdout || third.code !== res.code) determinism = "mismatch";
+      }
+      if (
+        (await dirHashFromDisk(pkg)) !== pkgBefore ||
+        (await dirHashFromDisk(opts.packageDir)) !== pkgBefore
+      )
+        return withhold(
+          "PACKAGE_TAMPERED",
+          "The verifier package changed during the run.",
+          sandbox,
+        );
+      const extra = {
+        score: exp.score,
+        min_score: profile.min_score,
+        profile: v2.profile,
+        packageId: v2.id,
+        determinism,
+      };
+      const checks: Check[] = judged.lines.map((l) => ({
+        id: l.id,
+        status: l.status,
+        kind: v2?.checks.find((c) => c.id === l.id)?.kind ?? "",
+        weight: l.weight,
+        required: l.required,
+        ms: l.ms,
+      }));
+      if (determinism === "mismatch")
+        return {
+          outcome: "WITHHOLD",
+          code: "VERIFY_NONDETERMINISTIC",
+          message: "The verification gave different results on identical input.",
+          exitCode: res.code,
+          checks,
+          sandbox,
+          ...extra,
+        };
+      if (res.code === 0 && exp.pass)
+        return {
+          outcome: "PASS",
+          exitCode: 0,
+          checks,
+          sandbox,
+          message: `Passed with score ${exp.score} (minimum ${profile.min_score}).`,
+          ...extra,
+        };
+      if (res.code === 1 && !exp.pass) {
+        const requiredFailed = checks.some((c) => c.status === "fail" && c.required);
+        return {
+          outcome: "FAIL",
+          exitCode: 1,
+          checks,
+          sandbox,
+          message: requiredFailed
+            ? "A required check failed."
+            : `Score ${exp.score} is below the minimum ${profile.min_score}.`,
+          ...extra,
+        };
+      }
+      return {
+        ...withhold(
+          "VERIFY_CRASH",
+          "Verifier exit code and output disagree or it crashed.",
+          sandbox,
+          res.code,
+          checks,
+        ),
+        ...extra,
+      };
+    }
+
     const checks = parseChecks(res.stdout);
     if (checks === null) {
       return withhold(

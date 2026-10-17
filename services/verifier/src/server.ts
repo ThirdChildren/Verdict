@@ -44,6 +44,15 @@ export function buildServer(opts: VerifierServerOptions = {}): FastifyInstance {
       return a;
     });
     app.get("/v0/verdicts", async () => ({ tasks: service.reports() }));
+    app.get<{ Params: { task_id: string } }>("/v0/verdicts/:task_id", async (req, reply) => {
+      const entry = service.reports().find((t) => t.task_id === req.params.task_id);
+      if (!entry) {
+        reply.code(404);
+        return { ok: false, code: "UNKNOWN_TASK", message: "no verdict for this task" };
+      }
+      return entry;
+    });
+    app.get("/v0/stats", async () => service.stats());
   }
   if (info) app.get("/v0/info", async () => info());
   return app;

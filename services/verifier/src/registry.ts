@@ -2,6 +2,37 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { TaskContract, VerdictRecord } from "@verdict/protocol";
 
+/** One check as the verifier saw it. Format-1 packages have no kind, weight or timing: those are null. */
+export interface RunCheckV2 {
+  id: string;
+  kind: string | null;
+  weight: number | null;
+  required: boolean;
+  status: "pass" | "fail";
+  ms: number | null;
+}
+
+/**
+ * Evidence about one run that is NOT in the signed VerdictRecord (that record is strict in the frozen protocol).
+ * Additive and optional: older registry files and the UI schema keep working.
+ */
+export interface RunReportV2 {
+  package_sha256: string;
+  package_id: string | null;
+  /** null for format-1 packages. */
+  profile: string | null;
+  score: number | null;
+  min_score: number | null;
+  checks: RunCheckV2[];
+  duration_ms: number;
+  sandbox: string;
+  determinism: "match" | "mismatch" | "skipped";
+  /** The worker's own exit code from DELIVER, kept as evidence. */
+  self_check_exit_code: number;
+  /** (self_check_exit_code === 0) === (outcome === "PASS"); a low rate flags drift between the worker's package copy and ours. */
+  self_check_agrees: boolean;
+}
+
 /** What the UI verifier lane shows about one verification run. */
 export interface RunReport {
   record: VerdictRecord;
@@ -15,6 +46,7 @@ export interface RunReport {
   /** sha256 of verify.sh itself. The contract commits to the whole package by package_sha256. */
   verify_sh_sha256: string;
   seconds: number;
+  v2?: RunReportV2;
 }
 
 export interface TaskEntry {

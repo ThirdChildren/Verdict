@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   contractHash,
   type Envelope,
@@ -21,8 +21,9 @@ import {
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { buildEnvelope, checkEnvelope } from "./envelope.js";
 import { MAX_COMPRESSED_BYTES } from "./extract.js";
-import type { Registry, RunReport, TaskEntry } from "./registry.js";
+import type { Registry, RunReport, RunReportV2, TaskEntry } from "./registry.js";
 import { extractTarball, type RunOptions, type RunResult, runVerification } from "./runner.js";
+import { computeStats } from "./stats.js";
 
 /** A runner result; `code` also covers the checks the verifier makes before it runs anything. */
 type Evaluated = Omit<RunResult, "code" | "sandbox"> & { code?: string; sandbox: string };
@@ -183,10 +184,10 @@ export class VerifierService {
       return refuse("DEADLINE_PASSED", "the deadline has passed; no more deliveries are accepted");
     if (t.reports.length >= (this.d.maxDeliveries ?? 1))
       return refuse("DELIVERY_REJECTED", "too many deliveries for this task");
-    const { attempt, delivery_sha256, bundle_b64 } = env.body;
+    const { attempt, delivery_sha256, bundle_b64, self_check_exit_code } = env.body;
     this.chain = this.chain
       .catch(() => undefined)
-      .then(() => this.verify(t, attempt, delivery_sha256, bundle_b64));
+      .then(() => this.verify(t, attempt, delivery_sha256, bundle_b64, self_check_exit_code));
     return { ok: true, detail: "queued" };
   }
 
@@ -256,6 +257,7 @@ export class VerifierService {
     attempt: number,
     announced: string,
     bundleB64: string,
+    selfCheckExitCode: number,
   ): Promise<void> {
     const c = t.contract;
     const started = Date.now();
@@ -294,11 +296,16 @@ export class VerifierService {
         try {
           return sha256File(join(this.d.packageDir, "verify.sh"));
         } catch {
-          return "unreadable";
+          try {
+            return sha256File(join(this.d.packageDir, "verify.mjs"));
+          } catch {
+            return "unreadable";
+          }
         }
       })(),
       seconds: Number(((Date.now() - started) / 1000).toFixed(1)),
     };
+    report.v2 = this.runReportV2(t, r, report, Date.now() - started, selfCheckExitCode);
     t.reports.push(report);
     if (release) t.released = true;
     this.d.registry.put(t);
@@ -309,6 +316,52 @@ export class VerifierService {
       this.send(this.d.workerUrl, "VERDICT", t.task_id, c.worker, record),
     ]);
     if (release) await this.release(t);
+  }
+
+  /** Evidence kept next to the signed record, never inside it. */
+  private runReportV2(
+    t: TaskEntry,
+    r: Evaluated,
+    report: RunReport,
+    durationMs: number,
+    selfCheckExitCode: number,
+  ): RunReportV2 {
+    return {
+      package_sha256: t.package_sha256,
+      package_id: r.packageId ?? this.packageId(),
+      profile: r.profile ?? null,
+      score: r.score ?? null,
+      min_score: r.min_score ?? null,
+      checks: r.checks.map((k) => ({
+        id: k.id,
+        kind: k.kind || null,
+        weight: k.weight ?? null,
+        required: k.required ?? true,
+        status: k.status,
+        ms: k.ms ?? null,
+      })),
+      duration_ms: durationMs,
+      sandbox: report.sandbox,
+      determinism: r.determinism ?? "skipped",
+      self_check_exit_code: selfCheckExitCode,
+      self_check_agrees: (selfCheckExitCode === 0) === (report.outcome === "PASS"),
+    };
+  }
+
+  private packageId(): string | null {
+    try {
+      const m = JSON.parse(readFileSync(join(this.d.packageDir, "manifest.json"), "utf8")) as {
+        id?: unknown;
+      };
+      return typeof m.id === "string" ? m.id : basename(this.d.packageDir);
+    } catch {
+      return basename(this.d.packageDir);
+    }
+  }
+
+  /** Per-package statistics from the registry (GET /v0/stats). */
+  stats(): ReturnType<typeof computeStats> {
+    return computeStats(this.d.registry.list());
   }
 
   /** Opens P only now, after a signed RELEASE, and hands it to the worker. P is never logged. */

@@ -130,7 +130,7 @@ async function deliver(
   ctx: Awaited<ReturnType<typeof setup>>,
   d: { tid: string; contract: TaskContract },
   dir: string,
-  opts: { announced?: string; from?: Signer; attempt?: number } = {},
+  opts: { announced?: string; from?: Signer; attempt?: number; selfCheck?: number } = {},
 ) {
   const { b64 } = bundle(dir);
   const env = (await buildEnvelope(
@@ -142,7 +142,7 @@ async function deliver(
       attempt: opts.attempt ?? 1,
       delivery_sha256: opts.announced ?? (await dirHashFromDisk(dir)),
       bundle_b64: b64,
-      self_check_exit_code: 0,
+      self_check_exit_code: opts.selfCheck ?? 0,
     },
     new Date(),
   )) as unknown as Envelope;
@@ -287,5 +287,117 @@ describe("fail closed", () => {
     const a = await deliver(ctx, d, GOOD, { from: stranger });
     expect(a).toMatchObject({ ok: false, code: "SIGNATURE_INVALID" });
     expect(ofType(ctx, "VERDICT")).toHaveLength(0);
+  });
+});
+
+describe("RunReport.v2 and /v0/stats", () => {
+  const fakeRun = (outcome: "PASS" | "FAIL") => async (): Promise<RunResult> => ({
+    outcome,
+    exitCode: outcome === "PASS" ? 0 : 1,
+    checks: [
+      { id: "tests", status: outcome === "PASS" ? "pass" : "fail" },
+      { id: "schema", status: "pass" },
+    ],
+    sandbox: "bwrap",
+    message: "x",
+  });
+
+  it("keeps the worker's self-check code as evidence, outside the signed record", async () => {
+    const ctx = await setup({ run: fakeRun("FAIL") });
+    const d = await deposit(ctx);
+    await deliver(ctx, d, GOOD, { selfCheck: 0 });
+    const report = ctx.service.reports()[0]?.reports[0];
+    expect(report?.v2).toMatchObject({
+      package_sha256: d.contract.verifier.package_sha256,
+      package_id: "csv2json-v1",
+      profile: null,
+      score: null,
+      min_score: null,
+      determinism: "skipped",
+      self_check_exit_code: 0,
+      self_check_agrees: false,
+      sandbox: "bwrap",
+    });
+    expect(report?.v2?.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(report?.v2?.checks[0]).toEqual({
+      id: "tests",
+      kind: null,
+      weight: null,
+      required: true,
+      status: "fail",
+      ms: null,
+    });
+    expect(Object.keys(report?.record ?? {})).not.toContain("v2");
+  });
+
+  it("computes per-package statistics from the registry", async () => {
+    const ctx = await setup({ run: fakeRun("PASS") });
+    const d = await deposit(ctx);
+    await deliver(ctx, d, GOOD, { selfCheck: 0 });
+    const stats = ctx.service.stats();
+    expect(stats.packages).toEqual([
+      {
+        package_sha256: d.contract.verifier.package_sha256,
+        package_id: "csv2json-v1",
+        format: 1,
+        profile: null,
+        runs: 1,
+        pass: 1,
+        pass_rate: 1,
+        mean_score: null,
+        median_duration_ms: expect.any(Number),
+        determinism_rate: null,
+        self_check_agreement: 1,
+        checks: [
+          { id: "tests", runs: 1, fail_rate: 0 },
+          { id: "schema", runs: 1, fail_rate: 0 },
+        ],
+        withhold_codes: {},
+      },
+    ]);
+  });
+
+  it("carries the format-2 score, profile, weights and determinism into the report and the stats", async () => {
+    const ctx = await setup({
+      run: async (): Promise<RunResult> => ({
+        outcome: "PASS",
+        exitCode: 0,
+        checks: [
+          { id: "fixtures", status: "pass", kind: "fixtures", weight: 50, required: true, ms: 0 },
+          { id: "visible", status: "fail", kind: "fixtures", weight: 10, required: false, ms: 0 },
+        ],
+        sandbox: "bwrap",
+        message: "x",
+        score: 83.33,
+        min_score: 80,
+        profile: "standard",
+        packageId: "json-norm",
+        determinism: "match",
+      }),
+    });
+    const d = await deposit(ctx);
+    await deliver(ctx, d, GOOD);
+    const v2 = ctx.service.reports()[0]?.reports[0]?.v2;
+    expect(v2).toMatchObject({
+      package_id: "json-norm",
+      profile: "standard",
+      score: 83.33,
+      min_score: 80,
+      determinism: "match",
+    });
+    expect(v2?.checks[1]).toEqual({
+      id: "visible",
+      kind: "fixtures",
+      weight: 10,
+      required: false,
+      status: "fail",
+      ms: 0,
+    });
+    expect(ctx.service.stats().packages[0]).toMatchObject({
+      format: 2,
+      profile: "standard",
+      mean_score: 83.33,
+      determinism_rate: 1,
+    });
   });
 });
