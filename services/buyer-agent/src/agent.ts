@@ -1,4 +1,4 @@
-import { type LlmClient, LlmError } from "@verdict/llm";
+import { type LlmClient, LlmError, LlmTimeoutError } from "@verdict/llm";
 import type { SpendIntent } from "@verdict/protocol";
 import type { WorkerDirectory } from "./identities.js";
 import {
@@ -15,7 +15,11 @@ import { INTENT_SYSTEM, MANDATE_SYSTEM } from "./prompts.js";
 
 export class AgentError extends Error {
   constructor(
-    readonly code: "PLAN_FAILED" | "AMOUNT_NOT_IN_GOAL" | "COUNTERPARTY_NOT_ALLOWED",
+    readonly code:
+      | "PLAN_FAILED"
+      | "LLM_TIMEOUT"
+      | "AMOUNT_NOT_IN_GOAL"
+      | "COUNTERPARTY_NOT_ALLOWED",
     message: string,
   ) {
     super(message);
@@ -23,7 +27,23 @@ export class AgentError extends Error {
   }
 }
 
-export type AgentConfig = { llm: LlmClient; workers: WorkerDirectory; now?: () => Date };
+export type AgentConfig = {
+  llm: LlmClient;
+  workers: WorkerDirectory;
+  now?: () => Date;
+  /** Overrides both call sites (env BUYER_LLM_TIMEOUT_MS does the same). */
+  timeoutMs?: number;
+};
+
+/** Default per-call budgets in ms (the whole call including its one retry). */
+export const MANDATE_TIMEOUT_MS = 60_000;
+export const INTENT_TIMEOUT_MS = 45_000;
+
+function timeoutFor(cfg: AgentConfig, dflt: number): number {
+  if (cfg.timeoutMs !== undefined) return cfg.timeoutMs;
+  const env = Number(process.env.BUYER_LLM_TIMEOUT_MS);
+  return Number.isFinite(env) && env > 0 ? env : dflt;
+}
 
 export class BuyerAgent {
   constructor(private readonly cfg: AgentConfig) {}
@@ -32,22 +52,29 @@ export class BuyerAgent {
   }
 
   async proposeMandate(goal: string): Promise<MandateProposal> {
+    return (await this.proposeMandateWithThinking(goal)).mandate;
+  }
+
+  async proposeMandateWithThinking(
+    goal: string,
+  ): Promise<{ mandate: MandateProposal; thinking: string }> {
     try {
-      const { value } = await this.cfg.llm.structured(
+      const { value, thinking } = await this.cfg.llm.structured(
         llmMandateSchema,
         [
           { role: "system", content: MANDATE_SYSTEM },
           { role: "user", content: `Goal: ${goal}` },
         ],
-        { name: "mandate", maxTokens: 700 },
+        { name: "mandate", maxTokens: 700, timeoutMs: timeoutFor(this.cfg, MANDATE_TIMEOUT_MS) },
       );
-      return toMandateProposal(
+      const mandate = toMandateProposal(
         value,
         this.now(),
         resolveWorker(value.worker, this.cfg.workers),
         goal,
         this.cfg.workers,
       );
+      return { mandate, thinking };
     } catch (err) {
       throw this.fail(err, "I could not turn that goal into a mandate. Please rephrase it.");
     }
@@ -59,17 +86,28 @@ export class BuyerAgent {
    * catches model misreads (0.75 -> 7.50) without second-guessing what the user asked for.
    */
   async planIntent(goal: string): Promise<SpendIntent> {
+    return (await this.planIntentWithThinking(goal)).intent;
+  }
+
+  async planIntentWithThinking(goal: string): Promise<{ intent: SpendIntent; thinking: string }> {
     let intent: SpendIntent;
     let minor: number;
+    let thinking: string;
     try {
-      const { value } = await this.cfg.llm.structured(
+      const r = await this.cfg.llm.structured(
         llmIntentSchema,
         [
           { role: "system", content: INTENT_SYSTEM },
           { role: "user", content: `Goal: ${goal}` },
         ],
-        { name: "spend_intent", maxTokens: 600 },
+        {
+          name: "spend_intent",
+          maxTokens: 600,
+          timeoutMs: timeoutFor(this.cfg, INTENT_TIMEOUT_MS),
+        },
       );
+      const value = r.value;
+      thinking = r.thinking;
       minor = value.amount_minor;
       intent = toSpendIntent(value, resolveWorker(value.worker, this.cfg.workers), this.now());
     } catch (err) {
@@ -81,11 +119,12 @@ export class BuyerAgent {
         `The planned amount ${intent.amount} tUSD does not appear in your request, so nothing was sent. Please state the amount clearly.`,
       );
     }
-    return intent;
+    return { intent, thinking };
   }
 
   private fail(err: unknown, message: string): AgentError {
     if (err instanceof CounterpartyError) return new AgentError(err.code, err.message);
+    if (err instanceof LlmTimeoutError) return new AgentError("LLM_TIMEOUT", err.message);
     if (err instanceof LlmError) return new AgentError("PLAN_FAILED", message);
     throw err;
   }

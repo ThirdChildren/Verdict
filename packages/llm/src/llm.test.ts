@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "vitest";
 import { z } from "zod";
-import { FakeLlm, LlmValidationError } from "./index.js";
+import { FakeLlm, LlmTimeoutError, LlmValidationError } from "./index.js";
 
 const S = z.object({ n: z.number().int().min(1) }).strict();
 const msgs = [{ role: "user" as const, content: "x" }];
@@ -53,4 +53,32 @@ test("backend errors surface as LLM_CALL_FAILED", async () => {
 test("FakeLlm refuses to exist in demo mode", () => {
   process.env.VERDICT_MODE = "demo";
   expect(() => new FakeLlm([])).toThrow(/demo/);
+});
+
+test("structured times out with LlmTimeoutError and aborts the run", async () => {
+  const llm = new FakeLlm([{ n: 1 }], { delayMs: 500 });
+  const t0 = Date.now();
+  await expect(llm.structured(S, msgs, { timeoutMs: 30 })).rejects.toMatchObject({
+    code: "LLM_TIMEOUT",
+  });
+  expect(Date.now() - t0).toBeLessThan(400);
+  expect(llm.calls[0]?.signal?.aborted).toBe(true);
+});
+
+test("generateText aborts on caller signal", async () => {
+  const llm = new FakeLlm(["hello"], { delayMs: 500 });
+  const ac = new AbortController();
+  setTimeout(() => ac.abort(), 20);
+  await expect(llm.generateText(msgs, { signal: ac.signal })).rejects.toBeInstanceOf(
+    LlmTimeoutError,
+  );
+});
+
+test("structured forwards onThinking and returns thinking", async () => {
+  const llm = new FakeLlm([{ n: 2 }], { thinking: "because" });
+  const seen: string[] = [];
+  const r = await llm.structured(S, msgs, { onThinking: (t) => seen.push(t) });
+  expect(r.thinking).toBe("because");
+  expect(seen).toEqual(["because"]);
+  expect((await new FakeLlm([{ n: 2 }]).structured(S, msgs)).thinking).toBe("");
 });

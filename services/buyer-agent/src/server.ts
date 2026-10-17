@@ -5,6 +5,7 @@ import {
   loggerOptions,
 } from "@verdict/http-local";
 import type { LlmClient } from "@verdict/llm";
+import { hashObj } from "@verdict/protocol";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AgentError, BuyerAgent } from "./agent.js";
@@ -26,9 +27,13 @@ export type ServerDeps = {
   getCapHash?: () => Promise<string | null>;
   getActiveCap?: () => Promise<ActiveCap | null>;
   now?: () => Date;
+  /** Per-call LLM budget override in ms (default: per call site, or env BUYER_LLM_TIMEOUT_MS). */
+  llmTimeoutMs?: number;
   /** Host/peer/Origin guard. main.ts always passes it. */
   localOnly?: LocalOnlyOptions;
 };
+
+const failMessage = (err: unknown) => (err instanceof AgentError ? err.message : String(err));
 
 const goalBody = z.object({ goal: z.string().min(3).max(1000) }).strict();
 
@@ -56,6 +61,7 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           llm: deps.llm,
           workers: deps.workers,
           ...(deps.now ? { now: deps.now } : {}),
+          ...(deps.llmTimeoutMs !== undefined ? { timeoutMs: deps.llmTimeoutMs } : {}),
         })
       : null;
 
@@ -66,7 +72,9 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           ? 422
           : err.code === "COUNTERPARTY_NOT_ALLOWED"
             ? 403
-            : 502,
+            : err.code === "LLM_TIMEOUT"
+              ? 504
+              : 502,
       );
       return { ok: false, code: err.code, message: err.message };
     }
@@ -87,11 +95,12 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
         .code(503)
         .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
     try {
-      const mandate = await agent.proposeMandate(body.data.goal);
-      emit("mandate.proposed", mandate);
+      const { mandate, thinking } = await agent.proposeMandateWithThinking(body.data.goal);
+      // Mandate fields stay at the top level (older readers); goal and thinking sit beside them.
+      emit("mandate.proposed", { ...mandate, goal: body.data.goal, thinking });
       return { ok: true, mandate };
     } catch (err) {
-      emit("mandate.failed", { message: String(err) });
+      emit("mandate.failed", { message: failMessage(err) });
       return guard(reply, err);
     }
   });
@@ -111,8 +120,9 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
         .code(503)
         .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
     try {
-      const intent = await agent.planIntent(body.data.goal);
-      emit("intent.proposed", intent);
+      const { intent, thinking } = await agent.planIntentWithThinking(body.data.goal);
+      // Intent fields stay at the top level (older readers); `intent` and `thinking` sit beside them.
+      emit("intent.proposed", { ...intent, intent, thinking });
       const capHash = (await deps.getCapHash?.()) ?? null;
       if (!capHash)
         return reply.code(409).send({
@@ -127,10 +137,16 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           message: "The engine client is not configured. Nothing was sent.",
         });
       const decision = await deps.engine.submitIntent(intent, capHash);
-      emit("intent.engine_decision", { intent, decision });
+      emit("intent.engine_decision", {
+        intent,
+        decision,
+        // Same form the engine stores: hash of the cap hash plus the intent.
+        intent_sha256: hashObj({ cap_hash: capHash, intent }),
+        cap_hash: capHash,
+      });
       return { ok: true, intent, decision };
     } catch (err) {
-      emit("intent.failed", { message: String(err) });
+      emit("intent.failed", { message: failMessage(err) });
       return guard(reply, err);
     }
   });

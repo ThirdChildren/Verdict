@@ -8,8 +8,16 @@ export class FakeLlm extends BaseLlm {
   readonly calls: CompleteRequest[] = [];
   private readonly replies: Array<string | Error>;
 
-  constructor(replies: Array<string | Error | object>) {
+  private readonly delayMs: number;
+  private readonly thinking: string;
+
+  constructor(
+    replies: Array<string | Error | object>,
+    opts: { delayMs?: number; thinking?: string } = {},
+  ) {
     super();
+    this.delayMs = opts.delayMs ?? 0;
+    this.thinking = opts.thinking ?? "";
     if (process.env.VERDICT_MODE === "demo") {
       throw new LlmError("LLM_FAKE_IN_DEMO", "FakeLlm must never be used in demo mode.");
     }
@@ -22,10 +30,26 @@ export class FakeLlm extends BaseLlm {
     this.calls.push(req);
     const next = this.replies.shift();
     if (next === undefined) throw new Error("FakeLlm: no scripted reply left");
+    if (this.delayMs > 0) {
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, this.delayMs);
+        req.signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+      if (req.signal?.aborted) throw new Error("FakeLlm: aborted");
+    }
     if (next instanceof Error) throw next;
+    if (this.thinking) req.onThinking?.(this.thinking);
     for (const t of next.match(/.{1,8}/gs) ?? []) req.onToken?.(t);
     return {
       text: next,
+      ...(this.thinking ? { thinking: this.thinking } : {}),
       stats: { ttftMs: 1, tokensPerSec: 100, generatedTokens: next.length, wallMs: 1 },
     };
   }

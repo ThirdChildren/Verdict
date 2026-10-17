@@ -99,6 +99,12 @@ export class QvacLlm extends BaseLlm {
           }
         : {}),
     });
+    // Abort (timeout or caller): cancel exactly this run in the SDK so the model stops generating.
+    const onAbort = () => {
+      void this.sdk.cancel({ requestId: run.requestId }).catch(() => undefined);
+    };
+    if (req.signal?.aborted) onAbort();
+    else req.signal?.addEventListener("abort", onAbort, { once: true });
     let firstTokenAt: number | null = null;
     for await (const ev of run.events) {
       if (ev.type === "contentDelta") {
@@ -109,6 +115,7 @@ export class QvacLlm extends BaseLlm {
         req.onThinking?.(ev.text);
       }
     }
+    req.signal?.removeEventListener("abort", onAbort);
     const f = await run.final;
     const wallMs = Date.now() - t0;
     const gen = f.stats?.generatedTokens ?? null;

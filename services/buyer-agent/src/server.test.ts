@@ -145,3 +145,95 @@ test("the compromised-agent endpoint does not exist without VERDICT_DEMO_TOGGLES
   expect(r.statusCode).toBe(404);
   vi.unstubAllEnvs();
 });
+
+describe("E20 event shapes and E23 timeouts", () => {
+  const intentReply = {
+    kind: "task_payment",
+    worker: "worker",
+    category: "code",
+    amount_minor: 120,
+    recurring: false,
+    interval: "none",
+    task_spec: "x",
+    deadline_minutes: 60,
+    rationale: "r",
+  };
+  const events = async (app: ReturnType<typeof buildServer>) =>
+    (await app.inject({ method: "GET", url: "/api/events" })).json().events as Array<{
+      type: string;
+      data: Record<string, unknown>;
+    }>;
+
+  test("mandate.proposed carries goal and thinking beside the mandate", async () => {
+    const app = buildServer({
+      logger: false,
+      llm: new FakeLlm([mandate()], { thinking: "weighing it" }),
+      workers: { worker: WORKER },
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/goal",
+      payload: { goal: "csv2json for 20 tUSD" },
+    });
+    const e = (await events(app)).find((x) => x.type === "mandate.proposed");
+    expect(e?.data.goal).toBe("csv2json for 20 tUSD");
+    expect(e?.data.thinking).toBe("weighing it");
+    expect(e?.data.max_total).toBeDefined();
+    await app.close();
+  });
+
+  test("intent.proposed and intent.engine_decision shapes", async () => {
+    const { hashObj } = await import("@verdict/protocol");
+    const decision = { status: "BLOCKED", code: "OVER_BUDGET" };
+    const app = buildServer({
+      logger: false,
+      llm: new FakeLlm([intentReply], { thinking: "plan" }),
+      workers: { worker: WORKER },
+      getCapHash: async () => "cap_abc",
+      engine: { submitIntent: async () => decision } as never,
+    });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/plan",
+      payload: { goal: "csv2json for 1.20" },
+    });
+    const ev = await events(app);
+    const p = ev.find((x) => x.type === "intent.proposed")?.data;
+    expect(p?.thinking).toBe("plan");
+    expect(p?.amount).toBeDefined();
+    expect((p?.intent as { amount: string } | undefined)?.amount).toBe(p?.amount);
+    const d = ev.find((x) => x.type === "intent.engine_decision")?.data;
+    expect(d?.cap_hash).toBe("cap_abc");
+    expect(d?.intent_sha256).toBe(hashObj({ cap_hash: "cap_abc", intent: r.json().intent }));
+    expect(d?.decision).toEqual(decision);
+    await app.close();
+  });
+
+  test("a slow model gives 504 and mandate.failed / intent.failed, never a hang", async () => {
+    const app = buildServer({
+      logger: false,
+      llm: new FakeLlm([mandate(), intentReply], { delayMs: 400 }),
+      workers: { worker: WORKER },
+      llmTimeoutMs: 30,
+    });
+    const g = await app.inject({
+      method: "POST",
+      url: "/api/goal",
+      payload: { goal: "csv2json for 20 tUSD" },
+    });
+    expect(g.statusCode).toBe(504);
+    expect(g.json().code).toBe("LLM_TIMEOUT");
+    const p = await app.inject({
+      method: "POST",
+      url: "/api/plan",
+      payload: { goal: "csv2json for 1.20" },
+    });
+    expect(p.statusCode).toBe(504);
+    const types = (await events(app)).map((x) => x.type);
+    expect(types).toContain("mandate.failed");
+    expect(types).toContain("intent.failed");
+    const f = (await events(app)).find((x) => x.type === "mandate.failed");
+    expect(f?.data.message).toBe("The local model took too long to answer. Please try again.");
+    await app.close();
+  });
+});

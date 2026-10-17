@@ -32,16 +32,26 @@ export type StructuredOpts = {
   /** Extra attempts after the first (default 1: one retry with the error appended). */
   retries?: number;
   onToken?: (token: string) => void;
+  onThinking?: (token: string) => void;
+  /** Total budget for the call including the retry; on expiry throws LlmTimeoutError and cancels the SDK run. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type GenerateOpts = {
+  timeoutMs?: number;
   maxTokens?: number;
   onToken?: (token: string) => void;
   onThinking?: (token: string) => void;
   signal?: AbortSignal;
 };
 
-export type StructuredResult<T> = { value: T; attempts: number; stats: CallStats[] };
+export type StructuredResult<T> = {
+  value: T;
+  attempts: number;
+  stats: CallStats[];
+  thinking: string;
+};
 export type TextResult = { text: string; thinking?: string; stats: CallStats };
 
 export interface LlmClient {
