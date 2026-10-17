@@ -84,7 +84,7 @@ Check: the start finishes without errors, and `ss -ltn | grep :3000` is empty af
   - `@qvac/sdk` 0.21.0 is now a devDependency of `@verdict/llm` (about 5 min to install).
 - QVAC models for buyer and worker (spike P0.2): note the cache path it prints, for the cleanup later.
 - Docker/Podman images for regtest (step 6).
-Final check before the event: `scripts/doctor.sh` is all green, and `pnpm install --frozen-lockfile --offline` works.
+Final check before the event: `scripts/doctor.sh` is all green (roles: `--role legion` is the default on Linux, `--role verifier` or `pnpm doctor:verifier` on the Mac), and `pnpm install --frozen-lockfile --offline` works.
 
 ---
 

@@ -23,6 +23,7 @@
     "demo:reset": "tsx scripts/demo-reset.ts",
     "verifier:hash": "tsx scripts/verifier-hash.ts",
     "doctor": "bash scripts/doctor.sh",
+    "doctor:verifier": "bash scripts/doctor.sh --role verifier",
     "keys:init": "tsx scripts/keys-init.ts",
     "dev:stop": "tsx scripts/dev-stop.ts",
     "dev:stack": "tsx scripts/dev-stack.ts",

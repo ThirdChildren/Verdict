@@ -28,6 +28,7 @@ The filter installs the verifier and what it needs, nothing else. It must **not*
 
 ## 3. Selftest: is this Mac safe to run the verifier?
 ```bash
+pnpm doctor:verifier   # tool and sandbox checks first; every row must be PASS
 pnpm verifier:selftest
 ```
 It runs honest and hostile deliveries through this Mac's sandbox and prints PASS or FAIL for each: an honest delivery, a broken one, one that overwrites the expected answers, one that reads them, one that writes outside its folder, a network attempt, a fork bomb, a hanging program and a gzip bomb. Every line must say PASS (one line may say SKIP: the memory-hog test is not run on macOS, see "Known limits").
