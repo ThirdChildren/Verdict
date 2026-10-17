@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { WordButton } from "@/components/ui/word-button";
+import { setStatsOpen } from "../lib/statsPanel.js";
 import { fetchVerifierTasks, type VerifierTaskView } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
 import { Hash } from "./Hash.js";
@@ -41,7 +43,12 @@ export function VerifierLane() {
   const pass = report?.outcome === "PASS";
   return (
     <section aria-label="Verifier" className="border-y-2 border-ink py-3">
-      <h2 className="text-xl font-semibold">Verifier</h2>
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-xl font-semibold">Verifier</h2>
+        <WordButton onClick={() => setStatsOpen(true)} aria-label="Open verifier stats (key s)">
+          Stats
+        </WordButton>
+      </div>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
         {task && !report && "Holding the release secret. Waiting for the worker's delivery."}
@@ -61,6 +68,19 @@ export function VerifierLane() {
               {report.code ? (REASON[report.code] ?? report.message) : "At least one check failed."}
             </p>
           )}
+          {report.v2?.score != null && report.v2.min_score != null && (
+            <p className="mt-3 border-t border-rule py-1.5 font-mono tabular-nums">
+              <span className="text-sm font-semibold uppercase tracking-wide">Score </span>
+              {report.v2.score} / {report.v2.min_score}
+              {report.v2.profile ? (
+                <>
+                  {" · "}
+                  <span className="text-sm font-semibold uppercase tracking-wide">Profile </span>
+                  <span className="uppercase">{report.v2.profile}</span>
+                </>
+              ) : null}
+            </p>
+          )}
           <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 border-t border-rule pt-2 text-base">
             <dt className="font-semibold">Checks</dt>
             <dd>
@@ -72,6 +92,9 @@ export function VerifierLane() {
                     <li key={c.id}>
                       <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
                       {c.id}: {c.status === "PASS" ? "passed" : "failed"}
+                      {c.status === "FAIL" && report.record.verdict === "RELEASE" && (
+                        <span className="text-subtle"> advisory</span>
+                      )}
                     </li>
                   ))}
                 </ul>

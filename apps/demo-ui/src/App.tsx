@@ -18,6 +18,7 @@ import { MockBanner } from "./components/MockBanner.js";
 import { NewTaskButton } from "./components/NewTaskButton.js";
 import { ShortcutHelp } from "./components/ShortcutHelp.js";
 import { Stage } from "./components/Stage.js";
+import { StatsPanel } from "./components/StatsPanel.js";
 import { neighbour, TaskRail } from "./components/TaskRail.js";
 import { useTheme } from "./components/ThemeProvider.js";
 import { TopBar } from "./components/TopBar.js";
@@ -31,6 +32,7 @@ import { isFreshBlock, shouldToastBlock } from "./lib/notify.js";
 import { usePresenter } from "./lib/presenter.js";
 import { useDemoToggles, useDescriptions } from "./lib/queries.js";
 import { isFrozen, useScoped } from "./lib/scope.js";
+import { setStatsOpen, toggleStats } from "./lib/statsPanel.js";
 import { useMedia } from "./lib/useMedia.js";
 import { useShortcuts } from "./lib/useShortcuts.js";
 import { railRows } from "./lib/view.js";
@@ -100,6 +102,7 @@ export function App() {
       Escape: () => {
         setConsoleOpen(false);
         setInspector(false);
+        setStatsOpen(false);
       },
       j: move(1),
       k: move(-1),
@@ -107,6 +110,7 @@ export function App() {
       "]": stepMandate(1),
       i: () => setInspector((v) => !v),
       a: () => setAgentsOpen(true),
+      s: toggleStats,
       m: () => (hasRoot ? setMandateOpen(true) : setWizardOpen(true)),
       d: () => demoConsole.open?.(),
       p: togglePresenter,
@@ -226,6 +230,7 @@ export function App() {
         mock={mock}
         descriptions={descriptions}
       />
+      <StatsPanel />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
       <MandateWizard open={wizardOpen} onOpenChange={setWizardOpen} />
       {state.root && (

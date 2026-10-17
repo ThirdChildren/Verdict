@@ -15,6 +15,10 @@ export const SHORTCUTS: { key: string; what: string }[] = [
   { key: "]", what: "Next mandate (down the list)" },
   { key: "i", what: "Inspector (proof and raw messages)" },
   { key: "a", what: "Agents (what each agent decided and produced; press again to close)" },
+  {
+    key: "s",
+    what: "Stats (every verifier run: pass rate, score, determinism; press again to close)",
+  },
   { key: "m", what: "Your mandate" },
   { key: "d", what: "Demo console (when it is available)" },
   { key: "p", what: "Presenter size (larger text for a projector)" },

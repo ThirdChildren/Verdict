@@ -9,11 +9,56 @@ import {
   type TaskList,
 } from "../lib/api.js";
 import { fromMinor, toMinor } from "../lib/money.js";
+import { type PackageStats, parseStats } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
 import { MOCK_PAYEE_NAMES, MOCK_ROOT, MOCK_WORKER_ID } from "./events.js";
 
 const TASK = "task_0123456789abcdef";
 const t0 = Date.now();
+
+export async function fetchVerifierStats(): Promise<PackageStats[]> {
+  return parseStats({
+    packages: [
+      {
+        package_sha256: `3f9a${"0".repeat(60)}`,
+        package_id: "csv2json-v1",
+        format: 1,
+        profile: null,
+        runs: 12,
+        pass: 9,
+        pass_rate: 0.75,
+        mean_score: null,
+        median_duration_ms: 4300,
+        determinism_rate: 1,
+        self_check_agreement: 0.92,
+        checks: [
+          { id: "tests", runs: 12, fail_rate: 0.25 },
+          { id: "schema", runs: 12, fail_rate: 0.08 },
+          { id: "limits", runs: 12, fail_rate: 0 },
+        ],
+        withhold_codes: { VERIFY_TIMEOUT: 1 },
+      },
+      {
+        package_sha256: `b71c${"0".repeat(60)}`,
+        package_id: "json-normalise-v1",
+        format: 2,
+        profile: "standard",
+        runs: 5,
+        pass_rate: 0.8,
+        mean_score: 91.2,
+        median_duration_ms: 3100,
+        determinism_rate: 1,
+        self_check_agreement: 1,
+        checks: [
+          { id: "fixtures", runs: 5, fail_rate: 0.2 },
+          { id: "property", runs: 5, fail_rate: 0.2 },
+          { id: "spec", runs: 5, fail_rate: 0 },
+        ],
+        withhold_codes: {},
+      },
+    ],
+  });
+}
 
 export async function newTask(): Promise<string> {
   return "mock".repeat(16);

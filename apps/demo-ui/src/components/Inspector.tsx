@@ -1,4 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WordButton } from "@/components/ui/word-button";
+import { setStatsOpen } from "../lib/statsPanel.js";
 import { EventsTab } from "./EventsTab.js";
 import { ProofTab } from "./ProofTab.js";
 import { VerifierLane } from "./VerifierLane.js";
@@ -12,6 +14,9 @@ export function Inspector({ mock }: { mock: boolean }) {
         <TabsTrigger value="proof">Proof</TabsTrigger>
         <TabsTrigger value="events">Events</TabsTrigger>
       </TabsList>
+      <WordButton onClick={() => setStatsOpen(true)} className="justify-self-start">
+        Stats of all verifier runs (s)
+      </WordButton>
       <TabsContent value="proof" className="grid gap-6">
         <ProofTab />
         {!mock && <WorkerLane />}
