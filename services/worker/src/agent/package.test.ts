@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeLlm } from "@verdict/llm";
@@ -38,6 +46,33 @@ describe("v2 prompt", () => {
     expect(p).toContain("one fenced code block");
     expect(p).not.toContain("HIDDEN_SECRET");
     expect(p).not.toContain("csv2json");
+  });
+  it("contains no byte of any hidden case file (every file in cases_dir, fixture and real packages)", () => {
+    const readAll = (dir: string): string[] => {
+      const out: string[] = [];
+      for (const f of readdirSync(dir, { withFileTypes: true })) {
+        if (f.isDirectory()) out.push(...readAll(join(dir, f.name)));
+        else out.push(readFileSync(join(dir, f.name), "utf8"));
+      }
+      return out;
+    };
+    for (const pkg of [
+      FIX,
+      join(import.meta.dirname, "../../../../verifier-packages/json-normalise-v1"),
+    ]) {
+      const t = loadPackageTask(pkg);
+      if (!t) throw new Error("no task");
+      const prompt = buildPackagePrompt(t);
+      const visible = readAll(join(pkg, "visible")).join("\n");
+      const hidden = readAll(join(pkg, "cases"));
+      expect(hidden.length).toBeGreaterThan(1);
+      for (const text of hidden) {
+        const body = text.trim();
+        // a hidden file that is byte-for-byte also a visible example is not a leak
+        if (body.length === 0 || visible.includes(body)) continue;
+        expect(prompt, body).not.toContain(body);
+      }
+    }
   });
   it("the generator names the file after the manifest entry", async () => {
     const llm = new FakeLlm(["```js\nconsole.log('x'.repeat(30));\n```"]);
