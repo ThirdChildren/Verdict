@@ -1,0 +1,21 @@
+spikes/**/bench-*.log
+spikes/**/*.log
+node_modules/
+dist/
+dist-types/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+scratch/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+.verdict-data/
+data/
+.logs/
+
+# Team tooling, never part of the submission
+.claude/
+CLAUDE.local.md
