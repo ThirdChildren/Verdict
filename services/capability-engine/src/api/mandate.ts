@@ -225,8 +225,8 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       // One transaction (invariant 3): the new root, its child and the retirement of every older root.
       // A root already known (same hash re-posted) retires nothing.
       const { retired, inFlight } = d.ledger.inTransaction(() => {
-        d.ledger.registerCapability(root, rootHash);
-        d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer);
+        d.ledger.registerCapability(root, rootHash, undefined, undefined, now);
+        d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer, now);
         return rootKnown
           ? { retired: [] as string[], inFlight: 0 }
           : d.ledger.retireOtherRoots(rootHash, now);
@@ -372,7 +372,7 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       });
       if (!dec.ok) return fail(422, dec);
       const childHash = capabilityHash(child);
-      d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer);
+      d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer, now);
       d.bus.publish({ type: "CAP_CHILD", data: child }, now);
       announceBudget(rootHash, childHash, now);
       return { ok: true, cap_hash: childHash };

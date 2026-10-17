@@ -117,6 +117,8 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   if (opts.ledger)
     registerEvidenceRoutes(app, {
       ledger: opts.ledger,
+      precision,
+      now,
       ...(opts.chainHeight ? { height: opts.chainHeight } : {}),
     });
 

@@ -122,6 +122,7 @@ describe("GET /api/tasks", () => {
           task_id: f.verdict.task_id,
           description: f.contract.task.spec,
           amount: f.contract.payment.amount,
+          root_hash: null,
         },
       ],
     });

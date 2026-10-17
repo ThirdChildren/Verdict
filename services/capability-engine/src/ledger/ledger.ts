@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS verifier_events (
 CREATE TABLE IF NOT EXISTS locks (
   payment_hash TEXT PRIMARY KEY, cltv_blocks INTEGER NOT NULL, locked_height INTEGER
 );
+CREATE TABLE IF NOT EXISTS mandate_snapshots (
+  root_hash TEXT PRIMARY KEY, cap_id TEXT NOT NULL, retired_at TEXT NOT NULL,
+  paid TEXT NOT NULL, locked TEXT NOT NULL, left_amount TEXT NOT NULL,
+  tasks_total INTEGER NOT NULL, tasks_settled INTEGER NOT NULL, tasks_refunded INTEGER NOT NULL,
+  tasks_blocked INTEGER NOT NULL, tasks_in_flight INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS capabilities_root ON capabilities(root_hash);
+CREATE INDEX IF NOT EXISTS accepted_intents_cap ON accepted_intents(cap_hash);
 CREATE INDEX IF NOT EXISTS reservations_cap ON reservations(cap_hash);
 CREATE INDEX IF NOT EXISTS reservations_root ON reservations(root_hash);
 `;
@@ -113,6 +121,51 @@ interface ResRow {
   payment_hash: string;
   amount: string;
   state: ReservationState;
+}
+
+export interface TaskCounts {
+  total: number;
+  settled: number;
+  refunded: number;
+  blocked: number;
+  inFlight: number;
+}
+
+/** reservation state -> count. A task with no reservation was offered but never funded: counted as blocked. */
+function countsFrom(rows: { state: ReservationState | null; n: number }[]): TaskCounts {
+  const t: TaskCounts = { total: 0, settled: 0, refunded: 0, blocked: 0, inFlight: 0 };
+  for (const r of rows) {
+    t.total += r.n;
+    if (r.state === "committed") t.settled += r.n;
+    else if (r.state === "released") t.refunded += r.n;
+    else if (r.state === "reserved") t.inFlight += r.n;
+    else t.blocked += r.n;
+  }
+  return t;
+}
+
+/** The one definition of budget left: ceiling minus everything not released, never below zero. */
+export function budgetLeft(ceiling: bigint, used: bigint): bigint {
+  const l = ceiling - used;
+  return l < 0n ? 0n : l;
+}
+
+export interface MandateRow {
+  /** True for a retired root with no snapshot: `locked` and `left` are unknown and reported as 0. */
+  approximate: boolean;
+  capId: string;
+  hash: string;
+  status: "active" | "retired" | "expired";
+  /** minor units */
+  ceiling: bigint;
+  perTask: string | null;
+  expiresAt: string;
+  createdAt: string | null;
+  retiredAt: string | null;
+  paid: bigint;
+  locked: bigint;
+  left: bigint;
+  tasks: TaskCounts;
 }
 
 const toReservation = (r: ResRow): Reservation => ({
@@ -144,6 +197,9 @@ export class Ledger {
     // E21: when a capability was retired by a newer mandate (null = never retired by replacement). Safe on old databases.
     if (!cols.some((c) => c.name === "revoked_at"))
       db.exec("ALTER TABLE capabilities ADD COLUMN revoked_at TEXT");
+    // E29: when a capability was registered (null for rows from before this column existed).
+    if (!cols.some((c) => c.name === "created_at"))
+      db.exec("ALTER TABLE capabilities ADD COLUMN created_at TEXT");
     const rcols = db.prepare("PRAGMA table_info(reservations)").all() as { name: string }[];
     if (!rcols.some((c) => c.name === "intent_sha256")) {
       db.exec("ALTER TABLE reservations ADD COLUMN intent_sha256 TEXT");
@@ -378,12 +434,13 @@ export class Ledger {
     hash: string,
     rootHash?: string,
     holder?: string,
+    now?: Date,
   ): void {
     const isRoot = cap.parent === null;
     this.db
       .prepare(
-        `INSERT OR IGNORE INTO capabilities (hash, cap_id, root_hash, parent_hash, max_total, max_payments, expires_at, json, holder)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+        `INSERT OR IGNORE INTO capabilities (hash, cap_id, root_hash, parent_hash, max_total, max_payments, expires_at, json, holder, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         hash,
@@ -395,6 +452,7 @@ export class Ledger {
         cap.expires_at,
         JSON.stringify(cap),
         holder ?? null,
+        (now ?? new Date()).toISOString(),
       );
   }
 
@@ -427,6 +485,7 @@ export class Ledger {
       const retired: string[] = [];
       let inFlight = 0;
       for (const root of roots) {
+        this.snapshotRetirement(root.hash, root.cap_id, now);
         this.revoke(root.hash, now);
         retired.push(root.cap_id);
         const kids = this.db
@@ -445,6 +504,172 @@ export class Ledger {
       }
       return { retired, inFlight };
     });
+  }
+
+  /** Task counts by funding state for one root, from the ledger (offers joined to their reservation). */
+  private taskCounts(rootHash: string): TaskCounts {
+    const rows = this.db
+      .prepare(
+        `SELECT r.state AS state, COUNT(*) AS n FROM capabilities c
+         JOIN accepted_intents a ON a.cap_hash = c.hash
+         JOIN offers o ON o.intent_sha256 = a.intent_sha256
+         LEFT JOIN reservations r ON r.payment_hash = o.payment_hash
+         WHERE c.root_hash = ? GROUP BY r.state`,
+      )
+      .all(rootHash) as { state: ReservationState | null; n: number }[];
+    return countsFrom(rows);
+  }
+
+  /** E29: freeze the figures of a root at the instant it is retired. Never overwritten (first write wins). */
+  private snapshotRetirement(rootHash: string, capId: string, now: Date): void {
+    // `locked` is frozen at retirement; a child still in flight settles afterwards and is not reflected here (documented limit).
+    const b = this.budget(rootHash) as BudgetUpdate;
+    const t = this.taskCounts(rootHash);
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO mandate_snapshots
+         (root_hash, cap_id, retired_at, paid, locked, left_amount, tasks_total, tasks_settled, tasks_refunded, tasks_blocked, tasks_in_flight)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        rootHash,
+        capId,
+        now.toISOString(),
+        b.committed.toString(),
+        b.reserved.toString(),
+        b.remaining.toString(),
+        t.total,
+        t.settled,
+        t.refunded,
+        t.blocked,
+        t.inFlight,
+      );
+  }
+
+  /**
+   * E29: every root, newest first (at most `limit`, capped at 100), with its figures and task counts.
+   * Three statements for the whole list, none per row. Retired roots read the frozen snapshot; the others the live ledger.
+   * `status` is "expired" for an unretired root past its expiry at `now`.
+   */
+  listMandates(now: Date, limit = 100): MandateRow[] {
+    const n = Math.max(1, Math.min(100, Math.floor(limit)));
+    const roots = this.db
+      .prepare(
+        `SELECT c.hash, c.cap_id, c.max_total, c.expires_at, c.revoked, c.revoked_at, c.created_at, c.json,
+                s.paid AS s_paid, s.locked AS s_locked, s.left_amount AS s_left,
+                s.tasks_total, s.tasks_settled, s.tasks_refunded, s.tasks_blocked, s.tasks_in_flight
+         FROM capabilities c LEFT JOIN mandate_snapshots s ON s.root_hash = c.hash
+         WHERE c.parent_hash IS NULL ORDER BY c.rowid DESC LIMIT ?`,
+      )
+      .all(n) as {
+      hash: string;
+      cap_id: string;
+      max_total: string;
+      expires_at: string;
+      revoked: number;
+      revoked_at: string | null;
+      created_at: string | null;
+      json: string;
+      s_paid: string | null;
+      s_locked: string | null;
+      s_left: string | null;
+      tasks_total: number | null;
+      tasks_settled: number | null;
+      tasks_refunded: number | null;
+      tasks_blocked: number | null;
+      tasks_in_flight: number | null;
+    }[];
+    if (roots.length === 0) return [];
+    const ids =
+      "SELECT hash FROM capabilities WHERE parent_hash IS NULL ORDER BY rowid DESC LIMIT ?";
+    const sums = new Map<string, { paid: bigint; locked: bigint }>();
+    for (const r of this.db
+      .prepare(
+        `SELECT root_hash, state, amount FROM reservations WHERE state != 'released' AND root_hash IN (${ids})`,
+      )
+      .all(n) as { root_hash: string; state: string; amount: string }[]) {
+      const e = sums.get(r.root_hash) ?? { paid: 0n, locked: 0n };
+      if (r.state === "committed") e.paid += BigInt(r.amount);
+      else e.locked += BigInt(r.amount);
+      sums.set(r.root_hash, e);
+    }
+    const groups = new Map<string, { state: ReservationState | null; n: number }[]>();
+    for (const r of this.db
+      .prepare(
+        `SELECT c.root_hash AS root_hash, r.state AS state, COUNT(*) AS n FROM capabilities c
+         JOIN accepted_intents a ON a.cap_hash = c.hash
+         JOIN offers o ON o.intent_sha256 = a.intent_sha256
+         LEFT JOIN reservations r ON r.payment_hash = o.payment_hash
+         WHERE c.root_hash IN (${ids}) GROUP BY c.root_hash, r.state`,
+      )
+      .all(n) as { root_hash: string; state: ReservationState | null; n: number }[]) {
+      const g = groups.get(r.root_hash) ?? [];
+      g.push({ state: r.state, n: r.n });
+      groups.set(r.root_hash, g);
+    }
+    return roots.map((r) => {
+      const cap = JSON.parse(r.json) as { max_per_task?: string };
+      const live = sums.get(r.hash) ?? { paid: 0n, locked: 0n };
+      const frozen = r.s_paid !== null && r.s_locked !== null && r.s_left !== null;
+      const ceiling = BigInt(r.max_total);
+      const retired = r.revoked === 1;
+      const approximate = retired && !frozen;
+      const tasks: TaskCounts =
+        frozen && r.tasks_total !== null
+          ? {
+              total: r.tasks_total,
+              settled: r.tasks_settled ?? 0,
+              refunded: r.tasks_refunded ?? 0,
+              blocked: r.tasks_blocked ?? 0,
+              inFlight: r.tasks_in_flight ?? 0,
+            }
+          : countsFrom(groups.get(r.hash) ?? []);
+      const status: MandateRow["status"] =
+        r.revoked === 1
+          ? "retired"
+          : Date.parse(r.expires_at) <= now.getTime()
+            ? "expired"
+            : "active";
+      return {
+        capId: r.cap_id,
+        hash: r.hash,
+        status,
+        ceiling,
+        perTask: cap.max_per_task ?? null,
+        expiresAt: r.expires_at,
+        createdAt: r.created_at,
+        retiredAt: status === "retired" ? r.revoked_at : null,
+        approximate,
+        paid: frozen ? BigInt(r.s_paid as string) : live.paid,
+        locked: frozen ? BigInt(r.s_locked as string) : approximate ? 0n : live.locked,
+        left: frozen
+          ? BigInt(r.s_left as string)
+          : approximate
+            ? 0n
+            : budgetLeft(ceiling, live.paid + live.locked),
+        tasks,
+      };
+    });
+  }
+
+  /**
+   * E29: the tasks the engine offered, oldest first, each with the root mandate it belongs to
+   * (offer -> accepted intent -> capability -> root). `rootHash` filters in SQL. Never selects the preimage.
+   */
+  listTasks(rootHash?: string): { taskId: string; contract: unknown; rootHash: string | null }[] {
+    const base = `SELECT o.task_id AS task_id, o.contract AS contract, c.root_hash AS root_hash FROM offers o
+         LEFT JOIN accepted_intents a ON a.intent_sha256 = o.intent_sha256
+         LEFT JOIN capabilities c ON c.hash = a.cap_hash`;
+    const rows = (
+      rootHash === undefined
+        ? this.db.prepare(`${base} ORDER BY o.rowid`).all()
+        : this.db.prepare(`${base} WHERE c.root_hash = ? ORDER BY o.rowid`).all(rootHash)
+    ) as { task_id: string; contract: string; root_hash: string | null }[];
+    return rows.map((r) => ({
+      taskId: r.task_id,
+      contract: JSON.parse(r.contract) as unknown,
+      rootHash: r.root_hash,
+    }));
   }
 
   private hasReservedReservation(capHash: string): boolean {
@@ -601,6 +826,8 @@ export class Ledger {
     const root = this.getCap(cap.root_hash);
     if (!root) return 0n;
     const rootLeft = BigInt(root.max_total) - this.used("root_hash", cap.root_hash);
+    if (hash === cap.root_hash)
+      return budgetLeft(BigInt(root.max_total), this.used("root_hash", hash));
     const m = own < rootLeft ? own : rootLeft;
     return m < 0n ? 0n : m;
   }

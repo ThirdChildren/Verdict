@@ -1,5 +1,6 @@
 import {
   contractHash,
+  formatAmount,
   hashObj,
   type TaskContract,
   taskContractSchema,
@@ -10,6 +11,8 @@ import type { Ledger } from "../ledger/index.js";
 
 export interface EvidenceDeps {
   readonly ledger: Ledger;
+  readonly precision?: number;
+  readonly now?: () => Date;
   /** Current block height. Absent or failing: /api/chain answers 503. */
   readonly height?: () => Promise<number>;
 }
@@ -30,13 +33,57 @@ function offerView(c: unknown): { description: string; amount: string } | null {
 }
 
 export function registerEvidenceRoutes(app: FastifyInstance, d: EvidenceDeps): void {
-  // Every task the engine offered, with the description from its signed contract (the task spec) and the price.
-  app.get("/api/tasks", async () => ({
-    tasks: d.ledger.listOffers().flatMap((o) => {
-      const v = offerView(o.contract);
-      return v ? [{ task_id: o.taskId, ...v }] : [];
-    }),
-  }));
+  // Every task the engine offered, with the description from its signed contract (the task spec), the price and the
+  // root mandate it belongs to. `?mandate=<root hash>` filters in SQL; an unknown hash is an empty list.
+  app.get("/api/tasks", async (req, reply) => {
+    const m = (req.query as { mandate?: unknown }).mandate;
+    if (m !== undefined && (typeof m !== "string" || !/^[0-9a-f]{64}$/.test(m))) {
+      reply.code(400);
+      return {
+        ok: false,
+        code: "MALFORMED_INTENT",
+        message: "The mandate filter must be the 64-character hash of a mandate.",
+      };
+    }
+    return {
+      tasks: d.ledger.listTasks(m).flatMap((o) => {
+        const v = offerView(o.contract);
+        return v ? [{ task_id: o.taskId, ...v, root_hash: o.rootHash }] : [];
+      }),
+    };
+  });
+
+  // Every mandate ever signed, newest first (at most 100). Retired ones show the figures frozen at retirement.
+  app.get("/api/mandates", async () => {
+    const p = d.precision ?? 2;
+    const f = (v: bigint) => formatAmount(v, p);
+    return {
+      mandates: d.ledger.listMandates(d.now ? d.now() : new Date(), 100).map((r) => ({
+        cap_id: r.capId,
+        hash: r.hash,
+        status: r.status,
+        ceiling: f(r.ceiling),
+        per_task: r.perTask,
+        expires_at: r.expiresAt,
+        created_at: r.createdAt,
+        retired_at: r.retiredAt,
+        // `approximate: true` appears only for a retired mandate with no snapshot (retired before E29): locked/left are unknown, shown as 0.00.
+        figures: {
+          paid: f(r.paid),
+          locked: f(r.locked),
+          left: f(r.left),
+          ...(r.approximate ? { approximate: true } : {}),
+        },
+        tasks: {
+          total: r.tasks.total,
+          settled: r.tasks.settled,
+          refunded: r.tasks.refunded,
+          blocked: r.tasks.blocked,
+          in_flight: r.tasks.inFlight,
+        },
+      })),
+    };
+  });
 
   app.get("/api/tasks/:task_id/evidence", async (req, reply) => {
     const id = (req.params as { task_id: string }).task_id;
