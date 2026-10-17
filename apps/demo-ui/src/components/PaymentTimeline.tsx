@@ -2,11 +2,11 @@ import type { PaymentStatus } from "@verdict/protocol";
 import type { ChainInfo } from "../lib/queries.js";
 import type { PaymentStep } from "../store.js";
 
-/** Escrow (HODL) states in order. The wallet reports Settled; the screen calls it "Succeeded". */
+/** Escrow (HODL) states in order. The wallet reports Settled; the screen calls it "Settled". */
 export const TIMELINE: { status: PaymentStatus; label: string }[] = [
   { status: "Pending", label: "Pending (locked)" },
   { status: "Claimable", label: "Claimable" },
-  { status: "Settled", label: "Succeeded" },
+  { status: "Settled", label: "Settled" },
 ];
 
 export const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });

@@ -8,7 +8,9 @@ import {
   type SignedMandate,
   type TaskList,
 } from "../lib/api.js";
+import { fromMinor, toMinor } from "../lib/money.js";
 import { useStore } from "../store.js";
+import { MOCK_PAYEE_NAMES, MOCK_ROOT, MOCK_WORKER_ID } from "./events.js";
 
 const TASK = "task_0123456789abcdef";
 const t0 = Date.now();
@@ -93,7 +95,6 @@ export async function fetchTasks(): Promise<TaskList> {
 }
 
 // Mock signing: the wizard is explorable with ?mock=1 but nothing is signed.
-const MOCK_WORKER = `02${"ab".repeat(32)}`;
 export async function proposeMandate(goal: string): Promise<GoalResponse> {
   const stated = /\d/.test(goal);
   const flags = stated
@@ -107,12 +108,12 @@ export async function proposeMandate(goal: string): Promise<GoalResponse> {
   return {
     ok: true,
     mandate: {
-      max_total: "5.00",
-      max_per_task: "2.00",
-      expires_at: new Date(Date.now() + 12 * 3_600_000).toISOString(),
-      allowed_payees: [MOCK_WORKER],
-      payee_names: { [MOCK_WORKER]: "worker" },
-      allowed_categories: ["data-conversion"],
+      max_total: MOCK_ROOT.max_total,
+      max_per_task: MOCK_ROOT.max_per_task,
+      expires_at: MOCK_ROOT.expires_at,
+      allowed_payees: [MOCK_WORKER_ID],
+      payee_names: MOCK_PAYEE_NAMES,
+      allowed_categories: MOCK_ROOT.allowed_categories,
       recurring: false,
       flags,
       needs_second_confirm: flags.length > 0,
@@ -151,34 +152,35 @@ export async function mineUntilRefund(taskId: string): Promise<void> {
       state: h >= to ? "refunded" : "mining",
     });
     if (h < to) setTimeout(tick, 400);
+    else applyMockRefund(taskId);
   };
   tick();
 }
 
-/** MOCK DATA: a second mandate replaces the first on the screen only. Nothing is signed or sent anywhere. */
+/** MOCK DATA: the signed mandate lands on the screen like the live events would. Nothing is signed or sent. */
 function installMockRoot(): void {
   const st = useStore.getState();
   const old = st.root;
-  if (!old) return;
-  const id = "cap_2222222222222222";
+  const id = old ? "cap_2222222222222222" : MOCK_ROOT.cap_id;
   const at = new Date().toISOString();
-  st.retire({
-    cap_hash: id,
-    retired: [old.cap_id],
-    reason: "The previous mandate was retired. Nothing was paid.",
-    at,
-  });
-  const base = st.lastSeq;
+  if (old)
+    st.retire({
+      cap_hash: id,
+      retired: [old.cap_id],
+      reason: "The previous mandate was retired. Nothing was paid.",
+      at,
+    });
+  const base = useStore.getState().lastSeq;
+  st.setPayeeNames(MOCK_PAYEE_NAMES);
   st.apply(
     uiEventSchema.parse({
       seq: base + 1,
       at,
       type: "CAP_ROOT",
       data: {
-        ...old,
+        ...MOCK_ROOT,
         cap_id: id,
-        max_total: "5.00",
-        expires_at: new Date(Date.now() + 12 * 3_600_000).toISOString(),
+        expires_at: new Date(Date.parse(MOCK_ROOT.expires_at)).toISOString(),
       },
     }),
   );
@@ -187,7 +189,51 @@ function installMockRoot(): void {
       seq: base + 2,
       at,
       type: "BUDGET_UPDATED",
-      data: { cap_id: id, remaining: "5.00", reserved: "0.00", committed: "0.00" },
+      data: { cap_id: id, remaining: MOCK_ROOT.max_total, reserved: "0.00", committed: "0.00" },
     }),
   );
+}
+
+/** MOCK DATA: the escrow timed out, so the stage, rail and ledger all show the refund. */
+function applyMockRefund(taskId: string): void {
+  const st = useStore.getState();
+  const t = st.tasks[taskId];
+  if (!t || !st.root) return;
+  const hash = t.paymentHash ?? "f".repeat(64);
+  const at = new Date().toISOString();
+  const base = st.lastSeq;
+  const b = st.budget;
+  st.apply(
+    uiEventSchema.parse({
+      seq: base + 1,
+      at,
+      type: "PAYMENT_STATUS",
+      data: { task_id: taskId, payment_hash: hash, status: "Failed" },
+    }),
+  );
+  st.apply(
+    uiEventSchema.parse({
+      seq: base + 2,
+      at,
+      type: "TASK_STATE",
+      data: { task_id: taskId, state: "REFUNDED" },
+    }),
+  );
+  if (b)
+    st.apply(
+      uiEventSchema.parse({
+        seq: base + 3,
+        at,
+        type: "BUDGET_UPDATED",
+        data: {
+          cap_id: st.root.cap_id,
+          remaining: fromMinor(
+            toMinor(b.remaining, st.precision) + toMinor(b.reserved, st.precision),
+            st.precision,
+          ),
+          reserved: fromMinor(0n, st.precision),
+          committed: b.committed,
+        },
+      }),
+    );
 }

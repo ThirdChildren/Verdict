@@ -101,6 +101,10 @@ export const SCENES: Scene[] = [
   },
   { id: "blocked", label: "11 · Blocked attempt", events: MOCK_EVENTS },
   // The settled task under the first mandate; open NEW MANDATE in the header to sign the second one.
-  { id: "second-mandate", label: "13 · Second mandate", events: upto(state("CLAIMED")) },
+  {
+    id: "second-mandate",
+    label: "13 · Second mandate (open NEW MANDATE in the header)",
+    events: upto(state("CLAIMED")),
+  },
 ];
 export const PLAY = "play";

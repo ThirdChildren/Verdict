@@ -121,7 +121,11 @@ function Attack() {
       >
         {attack.isPending ? "Sending..." : "Simulate compromised agent"}
       </Button>
-      {mock && <p className="text-sm text-subtle">Live only.</p>}
+      {mock && (
+        <p className="text-sm text-subtle">
+          Live only. In mock mode pick '11 · Blocked attempt' in the storyboard.
+        </p>
+      )}
       <div aria-live="polite" className="text-sm">
         {result && (
           <p role={result.bad ? "alert" : "status"} className="font-semibold">
@@ -139,6 +143,9 @@ const isTask = (s: AppState): string | null =>
 function Mine() {
   const taskId = useStore(isTask);
   const progress = useStore((s) => (taskId ? s.mine[taskId] : undefined));
+  const taskState = useStore((s) => (taskId ? s.tasks[taskId]?.state : undefined));
+  // Only funds that are still held can time out and return.
+  const holding = taskState === "ESCROW_LOCKED" || taskState === "VERDICT_WITHHOLD";
   const [error, setError] = useState<string | null>(null);
   const run = useMutation({
     mutationFn: (id: string) => mineUntilRefund(id),
@@ -160,12 +167,15 @@ function Mine() {
       <h3 className="text-sm font-semibold uppercase">Mine until refund</h3>
       <Button
         type="button"
-        disabled={!taskId || run.isPending || mining}
+        disabled={!taskId || !holding || run.isPending || mining}
         onClick={() => taskId && run.mutate(taskId)}
       >
         {mining ? "Mining..." : "Mine until refund"}
       </Button>
       {!taskId && <p className="text-sm text-subtle">Select a task in the list first.</p>}
+      {taskId && !holding && (
+        <p className="text-sm text-subtle">Only while the task's funds are still locked.</p>
+      )}
       <div aria-live="polite" className="grid gap-1 text-sm">
         {error && (
           <p role="alert" className="font-semibold">

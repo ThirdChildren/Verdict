@@ -40,11 +40,13 @@ export function EvidenceChecks({ ev }: { ev: Evidence }) {
       )}
       {v ? (
         <>
-          <div className="flex items-baseline gap-2 border-b border-rule-soft py-1.5 text-base">
-            <span aria-hidden>■</span>{" "}
-            <span className="text-sm font-semibold uppercase">Verifier package</span>{" "}
-            <Hash value={v.verifier_package_sha256} label="package hash" />
-          </div>
+          <HashCheck
+            label="Verifier package"
+            shown={v.verifier_package_sha256}
+            recomputed={null}
+            plain
+            note="Same package on every machine."
+          />
           <HashCheck
             label="Verdict"
             shown={hashUnsigned(v)}

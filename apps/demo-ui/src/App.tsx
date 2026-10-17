@@ -30,6 +30,7 @@ import { useDemoToggles, useDescriptions } from "./lib/queries.js";
 import { useMedia } from "./lib/useMedia.js";
 import { useShortcuts } from "./lib/useShortcuts.js";
 import { railRows } from "./lib/view.js";
+import { MOCK_PAYEE_NAMES } from "./mock/events.js";
 import { startMock } from "./mock/player.js";
 import { PLAY, SCENES } from "./mock/storyboard.js";
 import { useStore } from "./store.js";
@@ -63,6 +64,7 @@ export function App() {
   useEffect(() => {
     useStore.getState().reset();
     if (!mock) return connectEngine();
+    useStore.getState().setPayeeNames(MOCK_PAYEE_NAMES);
     const scene = SCENES.find((x) => x.id === sceneId);
     if (!scene) return startMock();
     const st = useStore.getState();
@@ -80,7 +82,11 @@ export function App() {
       if (k) st.select(k);
     };
     return {
-      n: () => setNewTaskSignal((v) => v + 1),
+      n: () => (hasRoot ? setNewTaskSignal((v) => v + 1) : setWizardOpen(true)),
+      Escape: () => {
+        setConsoleOpen(false);
+        setInspector(false);
+      },
       j: move(1),
       k: move(-1),
       i: () => setInspector((v) => !v),
@@ -145,7 +151,7 @@ export function App() {
           </aside>
         )}
         <main
-          className={`grid min-w-0 flex-1 gap-6 overflow-auto p-8 ${state.root ? "content-start" : "place-content-center"}`}
+          className={`grid min-w-0 flex-1 gap-6 overflow-auto p-8 [.presenter_&]:py-4 ${state.root ? "content-start" : "place-content-center"}`}
         >
           {blockNotice && !onBlockRow && <BlockNotice onDismiss={() => setBlockNotice(false)} />}
           {down && (

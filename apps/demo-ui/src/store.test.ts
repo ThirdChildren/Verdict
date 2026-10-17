@@ -148,3 +148,25 @@ describe("MANDATE_RETIRED", () => {
     useStore.getState().reset();
   });
 });
+
+describe("mock refund", () => {
+  it("applies the failed payment, REFUNDED and the released budget so stage, rail and ledger agree", async () => {
+    const { vi } = await import("vitest");
+    const { mineUntilRefund } = await import("./mock/api.js");
+    vi.useFakeTimers();
+    useStore.getState().reset();
+    const locked = MOCK_EVENTS.findIndex(
+      (e) => e.type === "TASK_STATE" && e.data.state === "ESCROW_LOCKED",
+    );
+    for (const e of MOCK_EVENTS.slice(0, locked + 1)) useStore.getState().apply(e);
+    const id = Object.keys(useStore.getState().tasks)[0] as string;
+    expect(useStore.getState().budget?.reserved).toBe("1.20");
+    await mineUntilRefund(id);
+    await vi.runAllTimersAsync();
+    const s = useStore.getState();
+    expect(s.tasks[id]?.state).toBe("REFUNDED");
+    expect(s.budget).toMatchObject({ reserved: "0.00", remaining: "5.00" });
+    vi.useRealTimers();
+    s.reset();
+  });
+});

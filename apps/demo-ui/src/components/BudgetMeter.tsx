@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { toMinor } from "../lib/money.js";
+import { fromMinor, toMinor } from "../lib/money.js";
 import type { AppState, BudgetView } from "../store.js";
 
 const SEGMENTS = [
@@ -56,7 +56,9 @@ export function BudgetMeter({ state }: { state: AppState }) {
                 <TooltipTrigger asChild>
                   <span>
                     <span className="text-subtle">{s.label}</span>{" "}
-                    <span className="text-base font-semibold">{b ? b[s.key] : "—"}</span>
+                    <span className="text-base font-semibold">
+                      {b ? b[s.key] : fromMinor(0n, state.precision)}
+                    </span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>{s.tip}</TooltipContent>

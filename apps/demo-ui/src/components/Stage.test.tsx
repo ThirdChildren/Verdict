@@ -106,7 +106,7 @@ describe("Stage", () => {
     render(<Stage state={upto(atState("VERDICT_RELEASE"))} live={null} />);
     const stepper = screen.getByRole("list", { name: "Progress" });
     expect(within(stepper).getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.getByText("Settled")).toBeTruthy();
+    expect(screen.getAllByText("Settled").length).toBeGreaterThan(0);
   });
   it("renders every step with its state word", () => {
     render(<Stage state={upto(atState("ESCROW_LOCKED"))} live={null} />);

@@ -15,9 +15,9 @@ test("an amount above the remaining budget is refused with the remaining shown",
 });
 
 test("the composed text carries the exact task amount and none of the mandate wording", () => {
-  const mandateText = "Paga fino a 5 tUSD in totale per lavori CSV";
-  const t = composeTaskGoal("1.20", "worker", " convertire un file CSV in JSON ");
-  expect(t).toBe("Paga 1.20 tUSD a worker per convertire un file CSV in JSON");
+  const mandateText = "Pay up to 5 tUSD in total for CSV jobs";
+  const t = composeTaskGoal("1.20", "worker", " convert a CSV file into JSON ");
+  expect(t).toBe("Pay 1.20 tUSD to worker to convert a CSV file into JSON");
   expect(t).not.toContain("5");
   expect(t).not.toContain(mandateText);
 });

@@ -122,6 +122,20 @@ function selection(s: AppState): Sel {
   return s.tasks[k] ? { kind: "task", id: k } : { kind: "none" };
 }
 
+/** "18 Oct, 17:00" in the viewer's time zone; the raw text when it is not a date. */
+function localWhen(iso: string): string {
+  const t = Date.parse(iso);
+  return Number.isNaN(t)
+    ? iso
+    : new Date(t).toLocaleString([], {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+}
+
 /** Payee as the mandate names it: the worker's name plus a short id, or the short id alone. */
 function payee(id: string, names: Record<string, string>): string {
   const short = middle(id, 12, 6);
@@ -180,9 +194,7 @@ function Buyer(props: {
         <Row label="Category" mono>
           {intent?.category}
         </Row>
-        <Row label="Deadline" mono>
-          {intent?.deadline}
-        </Row>
+        <Row label="Deadline">{intent?.deadline ? localWhen(intent.deadline) : undefined}</Row>
         <Row label="The agent's reason">{intent?.rationale}</Row>
         <Row label="Model reasoning">
           {buyer.thinking ? (
@@ -346,8 +358,7 @@ function Verifier(props: { sel: Sel; data: AgentsData; s: AppState }) {
           <Row label="Sandbox">
             {report ? (
               <span>
-                {report.sandbox} · no network ·{" "}
-                <span className="font-mono">{report.seconds} s</span>
+                sandboxed, no network, <span className="font-mono">{report.seconds} s</span>
               </span>
             ) : undefined}
           </Row>

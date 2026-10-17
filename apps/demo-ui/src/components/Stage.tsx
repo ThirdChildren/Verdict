@@ -83,17 +83,20 @@ function TaskStage(props: {
   const verdict = [...state.verdicts].reverse().find((v) => v.task_id === id) ?? null;
   const liveHere = props.live?.key.startsWith(`${id}:`) ? props.live : null;
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4 [.presenter_&]:gap-2">
       <header className="grid gap-1">
         <p className="text-base text-muted-foreground">Task #{n}</p>
         <h2 className="text-xl font-semibold">{taskLabel(id, props.descriptions)}</h2>
         <p className="text-base text-muted-foreground">
-          <span className="tabular-nums text-foreground">{task.amount ?? "—"} tUSD</span> to{" "}
-          {worker}
+          {task.amount && <span className="tabular-nums text-foreground">{task.amount} tUSD </span>}
+          to {worker}
         </p>
       </header>
       <StageStepper steps={steps} shown={shown} onShow={setViewed} />
-      <section aria-label={`Step ${shown + 1}: ${steps[shown]?.label}`} className="grid gap-4">
+      <section
+        aria-label={`Step ${shown + 1}: ${steps[shown]?.label}`}
+        className="grid gap-4 [.presenter_&]:gap-2"
+      >
         <p aria-live="polite" className={task.state === "CLAIMED" ? "sr-only" : "text-xl"}>
           {stopped ? STOPPED_CAPTION : held ? HELD_CAPTION : TASK_CAPTIONS[task.state]}
         </p>

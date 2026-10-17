@@ -72,7 +72,7 @@ describe("Timeline", () => {
   it("replaces Succeeded by Failed", () => {
     render(<Timeline history={[{ status: "Failed", at: "2026-10-18T14:45:00Z" }]} />);
     expect(screen.getByText("Failed")).toBeTruthy();
-    expect(screen.queryByText("Succeeded")).toBeNull();
+    expect(screen.queryByText("Settled")).toBeNull();
   });
 });
 

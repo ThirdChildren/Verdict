@@ -14,16 +14,16 @@ function Row({ row, selected }: { row: RailRow; selected: boolean }) {
         onClick={() => select(row.key)}
         aria-current={selected ? "true" : undefined}
         title={row.label}
-        className={`grid h-16 w-full min-w-0 grid-cols-[3ch_minmax(16ch,1fr)_auto] content-center items-baseline gap-x-2 gap-y-0.5 border-l-2 px-2 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
+        className={`grid min-h-16 w-full min-w-0 grid-cols-[3ch_minmax(0,1fr)] content-center items-baseline gap-x-2 gap-y-0.5 border-l-2 px-2 py-1.5 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
       >
         <span className="font-mono text-sm text-subtle">#{row.n}</span>
-        <span className="truncate text-base">{row.label}</span>
-        <span className="text-right font-mono text-xs whitespace-nowrap">
-          {row.amount ? `${row.amount} tUSD` : ""}
-        </span>
-        <span className="col-span-2 col-start-2 text-left">
+        <span className="line-clamp-2 text-base leading-snug">{row.label}</span>
+        <span className="col-start-2 flex flex-wrap items-baseline gap-x-3">
           <StatusChip chip={row.chip} />
-          {row.retired && <span className="ml-3 text-sm text-subtle">mandate retired</span>}
+          {row.amount && (
+            <span className="font-mono text-xs whitespace-nowrap">{row.amount} tUSD</span>
+          )}
+          {row.retired && <span className="text-sm text-subtle">mandate retired</span>}
         </span>
       </button>
     </li>

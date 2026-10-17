@@ -1,7 +1,7 @@
 import { fromMinor, toMinor } from "./money.js";
 
 /** Default task description, as the buyer agent understands it. */
-export const DEFAULT_TASK_DESCRIPTION = "convertire un file CSV in JSON";
+export const DEFAULT_TASK_DESCRIPTION = "convert a CSV file into JSON";
 const DEFAULT_TASK_AMOUNT_MINOR = 120n; // 1.20 tUSD at precision 2; scaled below
 export const AMOUNT_STEP = "0.10";
 
@@ -31,5 +31,5 @@ export function amountProblem(amount: string, remaining: string, precision: numb
 
 /** The text sent to the buyer agent. It never reuses the mandate's own wording (and its ceiling). */
 export function composeTaskGoal(amount: string, worker: string, description: string): string {
-  return `Paga ${amount} tUSD a ${worker} per ${description.trim()}`;
+  return `Pay ${amount} tUSD to ${worker} to ${description.trim()}`;
 }

@@ -326,7 +326,16 @@ export function MandateWizard(props: { open: boolean; onOpenChange: (open: boole
   };
   return (
     <Dialog open={props.open} onOpenChange={close}>
-      <DialogContent className="content-start gap-6">
+      <DialogContent
+        className="content-start gap-6"
+        onCloseAutoFocus={(e) => {
+          const next = document.querySelector<HTMLElement>('[aria-label="New task"] button');
+          if (next && !next.hasAttribute("disabled")) {
+            e.preventDefault();
+            next.focus();
+          }
+        }}
+      >
         <div className="mx-auto grid w-full max-w-3xl gap-4">
           <header className="grid gap-3">
             <DialogTitle className="text-3xl font-semibold">Create mandate</DialogTitle>

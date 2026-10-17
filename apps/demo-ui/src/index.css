@@ -133,3 +133,9 @@ html.presenter {
     font-size: 125%;
   }
 }
+
+/* ?mock=1: keep the MOCK DATA banner (36px) visible above dialogs. */
+html.mock [data-slot="dialog-content"] {
+  top: 2.25rem;
+  max-height: calc(100dvh - 2.25rem);
+}

@@ -65,6 +65,39 @@ describe("App in mock mode", () => {
     await userEvent.click(screen.getByRole("button", { name: /start working/i }));
     expect((await screen.findAllByText(/mandate retired/i)).length).toBeGreaterThan(0);
   });
+  it("mock first mandate: signing puts the mandate on screen and n opens New task", async () => {
+    render(
+      <Root>
+        <App />
+      </Root>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Create mandate" }));
+    await userEvent.type(
+      screen.getByRole("textbox"),
+      "Pay up to 5 tUSD to worker to convert CSV, within 12 hours",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /draft mandate/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /approve and sign/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /start working/i }));
+    expect((await screen.findAllByText(/Mandate · /)).length).toBeGreaterThan(0);
+    expect(document.activeElement?.textContent).toMatch(/new task/i);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.keyboard("n");
+    expect(await screen.findByRole("dialog", { name: "New task" })).toBeTruthy();
+  });
+  it("Esc closes the demo console", async () => {
+    render(
+      <Root>
+        <App />
+      </Root>,
+    );
+    await vi.waitFor(async () => {
+      await userEvent.keyboard("d");
+      expect(screen.queryByRole("complementary", { name: "Demo console" })).not.toBeNull();
+    });
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: "Demo console" })).toBeNull();
+  });
   it("toggles dark mode on <html> so portalled dialogs follow it", async () => {
     render(
       <Root>

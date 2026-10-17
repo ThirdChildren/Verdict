@@ -7,8 +7,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const time = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+const when = (iso: string) =>
+  new Date(iso).toLocaleString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "numeric",
+    month: "short",
+  });
 
 /** The signed root capability in plain language, raw JSON behind a disclosure. */
 export function MandateSummary(props: {
@@ -24,11 +29,11 @@ export function MandateSummary(props: {
     ["Spending", `Only for: ${r.allowed_categories.join(", ")}`],
     [
       "Who can be paid",
-      r.allowed_payees.map((p) => props.names[p] ?? `${p.slice(0, 18)}…`).join(", ") ||
+      r.allowed_payees.map((p) => props.names[p] ?? "Approved worker").join(", ") ||
         "Nobody listed",
     ],
     ["Recurring", r.recurring ? "Recurring payments allowed" : "No recurring payments"],
-    ["Expires", `Expires at ${time(r.expires_at)}`],
+    ["Expires", `Expires at ${when(r.expires_at)}`],
   ];
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>

@@ -18,6 +18,7 @@ export const SHORTCUTS: { key: string; what: string }[] = [
   { key: "p", what: "Presenter size (larger text for a projector)" },
   { key: "t", what: "Light or dark theme" },
   { key: "?", what: "This help" },
+  { key: "Esc", what: "Close the open panel (details, demo console or dialog)" },
 ];
 
 /** Keyboard shortcuts, one line each. Opened with `?`. */
@@ -31,7 +32,7 @@ export function ShortcutHelp(props: { open: boolean; onOpenChange: (open: boolea
         </DialogHeader>
         <dl className="grid divide-y divide-rule-soft border-y border-rule">
           {SHORTCUTS.map((s) => (
-            <div key={s.key} className="grid grid-cols-[3rem_1fr] items-center gap-4 py-1.5">
+            <div key={s.key} className="grid grid-cols-[4rem_1fr] items-center gap-4 py-1.5">
               <dt>
                 <Kbd>{s.key}</Kbd>
               </dt>

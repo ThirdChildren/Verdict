@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -80,9 +80,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const start = useStartTask();
   const { reset } = form;
 
+  // Only a signal that changes while this button is mounted opens the dialog: a key pressed earlier is stale.
+  const seenSignal = useRef(openSignal);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a changed signal opens the dialog
   useEffect(() => {
-    if (openSignal > 0 && !blocker) setOpen(true);
+    if (openSignal === seenSignal.current) return;
+    seenSignal.current = openSignal;
+    if (!blocker) setOpen(true);
   }, [openSignal]);
   // Each time the dialog opens, start from the defaults for what is left.
   useEffect(() => {

@@ -16,6 +16,7 @@ const raw = (type: string, data: unknown): unknown => ({ seq: seq++, at: at(), t
 const state = (s: string, attempt?: number) =>
   raw("TASK_STATE", { task_id: TASK, state: s, ...(attempt ? { attempt } : {}) });
 
+export const MOCK_WORKER_ID = WORKER;
 const rawEvents: unknown[] = [
   raw("CAP_ROOT", {
     version: "verdict-cap/0",
@@ -131,3 +132,11 @@ const rawEvents: unknown[] = [
 
 /** Validated at module load, so mock data can never drift from the schema. */
 export const MOCK_EVENTS: UiEvent[] = rawEvents.map((e) => uiEventSchema.parse(e));
+
+/** The one mock mandate: wizard Review, Your mandate and Agents all read from it. */
+export const MOCK_ROOT = (() => {
+  const e = MOCK_EVENTS.find((x) => x.type === "CAP_ROOT");
+  if (!e || e.type !== "CAP_ROOT") throw new Error("mock root missing");
+  return e.data;
+})();
+export const MOCK_PAYEE_NAMES: Record<string, string> = { [WORKER]: "worker" };

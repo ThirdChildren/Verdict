@@ -7,6 +7,7 @@ export function HashCheck({
   recomputed,
   note,
   matches,
+  plain,
 }: {
   label: string;
   /** The hash the services reported. */
@@ -16,14 +17,16 @@ export function HashCheck({
   note?: string;
   /** Overrides the plain equality test (used when the check is a cross-link, not a recompute). */
   matches?: boolean;
+  /** Same row, but nothing is claimed as checked here (a value only reported by the verifier). */
+  plain?: boolean;
 }) {
   const ok = recomputed !== null && (matches ?? recomputed === shown);
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-rule-soft py-1.5 text-base">
-      <span aria-hidden>{ok ? "■" : "▲"}</span>
+      <span aria-hidden>{ok || plain ? "■" : "▲"}</span>
       <span className="text-sm font-semibold uppercase">{label}</span>
       <Hash value={shown} label={label} />
-      {recomputed === null ? (
+      {plain ? null : recomputed === null ? (
         <span className="text-subtle">Cannot check yet: data missing.</span>
       ) : ok ? (
         <span className="font-semibold">verified in your browser</span>

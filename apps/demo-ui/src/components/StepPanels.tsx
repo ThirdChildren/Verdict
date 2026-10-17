@@ -23,7 +23,7 @@ function WorkerOutput({ text }: { text: string }) {
       role="log"
       aria-live="off"
       aria-label="Live model output"
-      className="h-[132px] overflow-y-auto border border-rule p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
+      className="h-[132px] overflow-y-auto [.presenter_&]:h-16 border border-rule p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
     >
       {text || "Waiting for the first tokens…"}
     </pre>
@@ -132,7 +132,7 @@ function PaidCard(props: {
       {file && (
         <>
           <p className="text-base">Delivered: {file.path}</p>
-          <pre className="max-h-16 overflow-hidden border border-rule px-3 py-1 font-mono text-base whitespace-pre-wrap">
+          <pre className="max-h-16 overflow-hidden border border-rule px-3 py-1 [.presenter_&]:max-h-9 font-mono text-base whitespace-pre-wrap">
             {previewLines(file.content, 2)}
           </pre>
         </>
@@ -175,7 +175,7 @@ export function SettlePanel(props: {
     props.chain &&
     (task.state === "VERDICT_WITHHOLD" || task.state === "ESCROW_LOCKED");
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 [.presenter_&]:gap-2">
       {last ? (
         <>
           <Timeline history={task.payHistory} />
