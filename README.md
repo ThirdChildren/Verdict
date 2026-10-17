@@ -95,10 +95,12 @@ Installed and working before the event on the Legion (Fedora, RTX 3080): the ful
 
 ## How to run
 
-Full steps land with `docs/SETUP.md`. The short version, on a Linux machine with Node 24, pnpm 12, a container runtime and a 16 GB NVIDIA GPU:
+Full steps: `docs/SETUP.md`. The short version, on a Linux machine with a container runtime and a 16 GB NVIDIA GPU:
 
 ```bash
-pnpm install --frozen-lockfile
+nvm use            # or fnm use: Node 24 from .nvmrc
+corepack enable    # pnpm 12.10.1 from package.json; pnpm 9 silently ignores the supply-chain settings
+pnpm install --frozen-lockfile   # always frozen: a bare install rewrites the lockfile
 pnpm keys:init && pnpm regtest:up && pnpm regtest:setup
 pnpm demo:reset            # wallet daemons + RGB channel (about 60 s)
 pnpm dev:verifier          # terminal 2
@@ -106,6 +108,8 @@ pnpm dev:stack --wallet    # terminal 1: engine, signer, buyer, worker, UI
 ```
 
 Checks: `pnpm typecheck && pnpm lint && pnpm test`. Real regtest end to end: `pnpm test:e2e`.
+
+Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VERIFIER.md`. Nothing reads a `.env` file: export variables in the shell; `.env.example` lists them.
 
 ## Built during the hackathon
 
