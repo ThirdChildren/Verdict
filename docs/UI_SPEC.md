@@ -27,6 +27,10 @@ Only typographic glyphs: ■ done or settled, □ waiting or lapsed, ▲ now or 
 - Refusal: `BlockCard`/`BlockedScene`, `role="alert"`, 2px left ink rule, bold `BLOCKED: <title>`, catalogue message verbatim, `Nothing was signed. No funds moved.`, budget line, `Reason code: <CODE>` in mono. When a block arrives while its row is not selected, `BlockNotice` (`role="alert"`, Dismiss word) appears in place of a toast.
 - Empty state: claim, three numbered lines, `Create mandate`.
 
+## Mandates list
+
+Above the task rail: one ruled row per mandate, newest first, `02 ■ ACTIVE 5.00 · 2.00/task · 9h11m left · 1 task`, `01 □ RETIRED 14:12 · 5.00 · 2 tasks`, `▲ EXPIRED`. The selected row carries the left rule; `[` and `]` move between mandates. Selection scopes the rail, the stage, the header ledger (frozen figures with `AT RETIREMENT hh:mm:ss` for a retired one) and the Agents panel; the header mandate word follows the selection. Retired and expired mandates disable NEW TASK with a one-sentence reason. Data: `GET /api/mandates` and `GET /api/tasks?mandate=`, parsed with Zod on connect, then live events (a new CAP_ROOT selects itself).
+
 ## Dialogs and panels
 `ui/dialog.tsx` and `ui/sheet.tsx` are full-width panels ruled above and below (`Close ×` word); `className` styles the inner column. `MandateWizard`: text step indicator `1 WRITE › 2 REVIEW › 3 SIGN` (current bold), examples as underlined text buttons, Review as a two-column ruled ledger with mono numbers (ceiling, expiry, workers, category), raw JSON behind a disclosure, sticky footer with `Back` and `Approve and sign`, Sign step a ruled block. `MandateSummary`, `NewTaskButton`, `ShortcutHelp` are ruled two-column lists; shortcut keys use `kbd` in mono. In-place notices (`Note`) replace every toast.
 
