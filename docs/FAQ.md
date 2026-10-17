@@ -26,8 +26,5 @@ The delivery runs in a sandbox with no network, a scrubbed environment, resource
 **What breaks if a wallet daemon restarts?**
 The RGB channel stays open on paper but its HTLCs never become claimable, so tasks stall before delivery. Funds are not lost: the HTLC times out. Recovery is `pnpm demo:reset` (ADR-023); the dev stack therefore never restarts daemons, and the UI shows a stall alert.
 
-**Can I create a second mandate?**
-Yes: NEW MANDATE in the header. A new root retires the previous one and its unused permissions, returns the unused budget, and lets a task already in flight finish under its own permission (`docs/ARCHITECTURE.md`, mandate section).
-
 **What is the real product after Sunday?**
 A policy layer for agent spending: budgets, attenuated delegations, escrow with verifiable outcomes, signed receipts. The first user is a team running agents that buy services. Honest gap: one task type, one verifier, no customer yet.
