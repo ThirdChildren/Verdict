@@ -1,4 +1,3 @@
-import { CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchVerifierTasks, type VerifierTaskView } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
@@ -41,20 +40,14 @@ export function VerifierLane() {
   const report = task?.reports[task.reports.length - 1];
   const pass = report?.outcome === "PASS";
   return (
-    <section aria-label="Verifier" className="rounded-xl border-2 border-foreground bg-card p-5">
-      <h2 className="flex items-center gap-2 text-xl font-bold">
-        <ShieldCheck aria-hidden className="size-6" /> Verifier
-      </h2>
+    <section aria-label="Verifier" className="border-y-2 border-ink py-3">
+      <h2 className="text-xl font-semibold">Verifier</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
         {task && !report && "Holding the release secret. Waiting for the worker's delivery."}
         {report && (
-          <span className="flex items-center gap-2 text-2xl font-bold">
-            {pass ? (
-              <CheckCircle2 aria-hidden className="size-7 text-info" />
-            ) : (
-              <XCircle aria-hidden className="size-7 text-danger-soft-foreground" />
-            )}
+          <span className="block text-2xl font-semibold">
+            <span aria-hidden>■ </span>
             {pass
               ? "PASS: the delivery passed every check. The secret was released to the worker."
               : "FAIL: the delivery was rejected. The secret stays locked."}
@@ -68,14 +61,22 @@ export function VerifierLane() {
               {report.code ? (REASON[report.code] ?? report.message) : "At least one check failed."}
             </p>
           )}
-          <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-base">
+          <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 border-t border-rule pt-2 text-base">
             <dt className="font-semibold">Checks</dt>
             <dd>
-              {report.record.checks.length === 0
-                ? "none ran"
-                : report.record.checks
-                    .map((c) => `${c.id}: ${c.status === "PASS" ? "passed" : "failed"}`)
-                    .join(" · ")}
+              {report.record.checks.length === 0 ? (
+                "none ran"
+              ) : (
+                <ul className="font-mono text-sm">
+                  {report.record.checks.map((c) => (
+                    <li key={c.id}>
+                      <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
+                      {c.id}{" "}
+                      <span className="font-semibold">{c.status === "PASS" ? "pass" : "fail"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </dd>
             <dt className="font-semibold">Sandbox</dt>
             <dd>
@@ -98,7 +99,7 @@ export function VerifierLane() {
               <Hash value={report.record.verifier_sig} label="verdict signature" />
             </dd>
           </dl>
-          <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-muted p-3 font-mono text-sm">
+          <pre className="mt-3 max-h-40 overflow-auto border border-rule p-3 font-mono text-sm">
             {report.log_tail.join("\n")}
           </pre>
         </>

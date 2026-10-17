@@ -1,6 +1,4 @@
-import { Check, Copy } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 /** Copies text; falls back to a hidden textarea when the async clipboard API is missing or refuses. */
 export async function copyText(text: string): Promise<boolean> {
@@ -28,28 +26,33 @@ export async function copyText(text: string): Promise<boolean> {
 /** The full task id in mono with a copy button; the id is what the "re-run it yourself" commands need. */
 export function TaskIdCopy({ taskId }: { taskId: string }) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
   const copy = async () => {
     if (await copyText(taskId)) {
+      setFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } else {
-      toast.error("Copy is not available here. Select the task id and copy it by hand.");
+      setFailed(true);
     }
   };
-  const Icon = copied ? Check : Copy;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-base">Task id</span>
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <span className="text-sm text-subtle uppercase">Task id</span>
       <code className="font-mono text-base break-all select-all">{taskId}</code>
       <button
         type="button"
         onClick={copy}
         aria-label="Copy task id"
-        className="inline-flex min-h-9 items-center gap-1 rounded border px-2 text-base hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="cursor-pointer text-sm font-semibold uppercase underline decoration-rule underline-offset-4 outline-none hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
-        <Icon aria-hidden className="size-4" />
         <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
       </button>
+      {failed && (
+        <span role="alert" className="text-sm font-semibold">
+          Copy is not available here. Select the task id and copy it by hand.
+        </span>
+      )}
     </div>
   );
 }

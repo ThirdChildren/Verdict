@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pickaxe, ShieldAlert, Wrench, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { WordButton } from "@/components/ui/word-button";
 import { ApiError, mineUntilRefund } from "../lib/api.js";
 import { mineErrorText } from "../lib/mine.js";
 import { isMock } from "../lib/mode.js";
@@ -34,9 +33,9 @@ function useWorkerSwitches() {
       return setWorkerConfig(c);
     },
     onSuccess: (cfg) => qc.setQueryData(["worker-config"], cfg),
-    onError: () => toast.error("The worker did not accept the change."),
   });
   return {
+    failed: change.isError,
     config: mock ? canned : (q.data ?? null),
     unreachable: !mock && q.isError,
     set: (c: Partial<WorkerConfig>) => change.mutate(c),
@@ -60,29 +59,32 @@ function Switches() {
   ];
   return (
     <section aria-label="Worker switches" className="grid content-start gap-2">
-      <h3 className="flex items-center gap-2 text-base font-semibold">
-        <Wrench aria-hidden className="size-4" /> Worker switches
-      </h3>
+      <h3 className="text-sm font-semibold uppercase">Worker switches</h3>
       {w.unreachable && (
         <p role="alert" className="text-sm font-semibold">
           Worker not reachable: the switches below are not its real state.
         </p>
       )}
+      {w.failed && (
+        <p role="alert" className="text-sm font-semibold">
+          <span aria-hidden>▲ </span>The worker did not accept the change.
+        </p>
+      )}
       {rows.map((r) => {
         const on = w.config?.[r.key] === true;
         return (
-          <div key={r.key} className="flex items-start gap-3">
+          <div key={r.key} className="flex items-center gap-3">
             <Switch
               id={`sw-${r.key}`}
               checked={on}
               disabled={!w.config || w.busy}
               onCheckedChange={(v) => w.set({ [r.key]: v })}
             />
-            <div className="grid gap-0.5">
+            <div className="flex flex-wrap items-baseline gap-x-3">
               <Label htmlFor={`sw-${r.key}`} className="text-base">
                 {r.label}: {w.config ? (on ? "on" : "off") : "unknown"}
               </Label>
-              <p className="text-sm text-muted-foreground">{r.help}</p>
+              <p className="text-sm text-subtle">{r.help}</p>
             </div>
           </div>
         );
@@ -94,30 +96,39 @@ function Switches() {
 function Attack() {
   const attack = useAttack();
   const mock = isMock();
+  const [result, setResult] = useState<{ text: string; bad: boolean } | null>(null);
   return (
     <section
       aria-label="Compromised agent"
       className="grid content-start gap-2"
       title="The real buyer agent tries to pay someone not allowed. The engine must refuse."
     >
-      <h3 className="flex items-center gap-2 text-base font-semibold">
-        <ShieldAlert aria-hidden className="size-4" /> Compromised agent
-      </h3>
+      <h3 className="text-sm font-semibold uppercase">Compromised agent</h3>
       <Button
         type="button"
         variant="outline"
         disabled={mock || attack.isPending}
         onClick={() =>
           attack.mutate(undefined, {
-            onSuccess: (r) => toast(r.message),
+            onSuccess: (r) => setResult({ text: r.message, bad: false }),
             onError: (e) =>
-              toast.error(e instanceof ApiError ? e.message : "The simulation could not run."),
+              setResult({
+                text: e instanceof ApiError ? e.message : "The simulation could not run.",
+                bad: true,
+              }),
           })
         }
       >
         {attack.isPending ? "Sending..." : "Simulate compromised agent"}
       </Button>
-      {mock && <p className="text-sm text-muted-foreground">Live only.</p>}
+      {mock && <p className="text-sm text-subtle">Live only.</p>}
+      <div aria-live="polite" className="text-sm">
+        {result && (
+          <p role={result.bad ? "alert" : "status"} className="font-semibold">
+            {result.text}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -146,9 +157,7 @@ function Mine() {
       className="grid content-start gap-2"
       title="Mines blocks until the selected task's locked funds time out and return."
     >
-      <h3 className="flex items-center gap-2 text-base font-semibold">
-        <Pickaxe aria-hidden className="size-4" /> Mine until refund
-      </h3>
+      <h3 className="text-sm font-semibold uppercase">Mine until refund</h3>
       <Button
         type="button"
         disabled={!taskId || run.isPending || mining}
@@ -156,12 +165,21 @@ function Mine() {
       >
         {mining ? "Mining..." : "Mine until refund"}
       </Button>
-      {!taskId && <p className="text-sm text-muted-foreground">Select a task in the list first.</p>}
+      {!taskId && <p className="text-sm text-subtle">Select a task in the list first.</p>}
       <div aria-live="polite" className="grid gap-1 text-sm">
         {error && (
           <p role="alert" className="font-semibold">
             {error}
           </p>
+        )}
+        {progress?.state === "mining" && (
+          <div
+            role="img"
+            aria-label={`Mining ${progress.percent} percent`}
+            className="h-1 w-full bg-rule-soft"
+          >
+            <div className="h-full bg-ink" style={{ width: `${progress.percent}%` }} />
+          </div>
         )}
         {progress && (
           <p role="status">
@@ -178,18 +196,18 @@ function Mine() {
   );
 }
 
-/** Bottom drawer with the live demo controls. Only rendered when the engine enables the demo switches. */
+/** Bottom panel with the live demo controls, ruled above. Only rendered when the engine enables the demo switches. */
 export function DemoConsole(props: { open: boolean; onClose: () => void }) {
   if (!props.open) return null;
   return (
-    <aside aria-label="Demo console" className="shrink-0 border-t-2 bg-card px-8 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold">Demo console</h2>
-        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
-          <X aria-hidden /> Close
-        </Button>
+    <aside aria-label="Demo console" className="shrink-0 border-t-2 border-ink bg-paper px-8 py-2">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Demo console</h2>
+        <WordButton onClick={props.onClose}>
+          Close <span aria-hidden>×</span>
+        </WordButton>
       </div>
-      <div className="grid grid-cols-3 gap-8">
+      <div className="grid grid-cols-3 divide-x divide-rule-soft [&>*]:px-6 [&>*:first-child]:pl-0">
         <Switches />
         <Attack />
         <Mine />

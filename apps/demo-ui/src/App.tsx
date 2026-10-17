@@ -6,6 +6,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { BlockNotice } from "./components/BlockNotice.js";
 import { DemoConsole } from "./components/DemoConsole.js";
 import { EmptyState } from "./components/EmptyState.js";
 import { Inspector } from "./components/Inspector.js";
@@ -22,7 +23,7 @@ import { useLiveStream } from "./components/WorkerLane.js";
 import { connectEngine } from "./connect.js";
 import { demoConsole, registerConsole } from "./lib/console.js";
 import { isMock } from "./lib/mode.js";
-import { blockToast, isFreshBlock, shouldToastBlock } from "./lib/notify.js";
+import { isFreshBlock, shouldToastBlock } from "./lib/notify.js";
 import { usePresenter } from "./lib/presenter.js";
 import { useDemoToggles, useDescriptions } from "./lib/queries.js";
 import { useMedia } from "./lib/useMedia.js";
@@ -45,6 +46,7 @@ export function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [blockNotice, setBlockNotice] = useState(false);
   const demoEnabled = useDemoToggles();
   useEffect(() => {
     if (!demoEnabled) {
@@ -102,8 +104,12 @@ export function App() {
       isFreshBlock(newest.at, Date.now(), mock) &&
       shouldToastBlock(useStore.getState().selected, newest.seq)
     )
-      blockToast();
+      setBlockNotice(true);
   }, [blockCount, newest]);
+  const onBlockRow = state.selected?.startsWith("block:") === true;
+  useEffect(() => {
+    if (onBlockRow) setBlockNotice(false);
+  }, [onBlockRow]);
   const down = !mock && state.connections.engine === "disconnected";
   return (
     <div className="flex h-screen flex-col bg-background text-base text-foreground">
@@ -133,6 +139,7 @@ export function App() {
         <main
           className={`grid min-w-0 flex-1 gap-6 overflow-auto p-8 ${state.root ? "content-start" : "place-content-center"}`}
         >
+          {blockNotice && !onBlockRow && <BlockNotice onDismiss={() => setBlockNotice(false)} />}
           {down && (
             <div role="alert" className="border-y-2 border-ink p-4">
               <p className="text-lg font-semibold">Engine disconnected</p>

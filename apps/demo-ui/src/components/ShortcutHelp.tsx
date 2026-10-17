@@ -23,16 +23,16 @@ export const SHORTCUTS: { key: string; what: string }[] = [
 export function ShortcutHelp(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-2xl">Keyboard shortcuts</DialogTitle>
+          <DialogTitle className="text-xl">Keyboard shortcuts</DialogTitle>
           <DialogDescription>Single keys. They are ignored while you type.</DialogDescription>
         </DialogHeader>
-        <dl className="grid gap-2">
+        <dl className="grid divide-y divide-rule-soft border-y border-rule">
           {SHORTCUTS.map((s) => (
-            <div key={s.key} className="flex items-center gap-4">
-              <dt className="w-8">
-                <Kbd className="h-7 min-w-7 text-sm">{s.key}</Kbd>
+            <div key={s.key} className="grid grid-cols-[3rem_1fr] items-center gap-4 py-1.5">
+              <dt>
+                <Kbd>{s.key}</Kbd>
               </dt>
               <dd className="text-base">{s.what}</dd>
             </div>

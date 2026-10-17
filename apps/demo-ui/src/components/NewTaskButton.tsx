@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,6 +63,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const precision = useStore((s) => s.precision);
   const names = useStore((s) => s.payeeNames);
   const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
   const remaining = budget?.remaining ?? root?.max_total ?? "0";
   const blocker = newTaskBlocker(root !== null, budget?.remaining ?? null, precision);
@@ -85,11 +86,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   }, [openSignal]);
   // Each time the dialog opens, start from the defaults for what is left.
   useEffect(() => {
-    if (open)
+    if (open) {
+      setFailure(null);
       reset({
         description: DEFAULT_TASK_DESCRIPTION,
         amount: defaultTaskAmount(remaining, precision),
       });
+    }
   }, [open, remaining, precision, reset]);
 
   const submit = form.handleSubmit(async (v) => {
@@ -98,10 +101,10 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
         amount: v.amount,
         goal: composeTaskGoal(v.amount, worker, v.description),
       });
-      toast.success(`Task sent: ${v.amount} tUSD to ${worker}.`);
+      setSent(`Task sent: ${v.amount} tUSD to ${worker}.`);
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Something went wrong.");
+      setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
     }
   });
   const amount = form.watch("amount");
@@ -120,20 +123,32 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       >
         New task
       </Button>
-      <p id={`${id}-why`} aria-live="polite" className="mt-2 text-sm text-muted-foreground">
+      <p id={`${id}-why`} aria-live="polite" className="mt-2 text-sm text-subtle">
         {blocker ?? "No new signature needed."}
       </p>
-      <Dialog open={open && !blocker} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
+      {sent && (
+        <p role="status" className="mt-1 text-sm font-semibold">
+          <span aria-hidden>■ </span>
+          {sent}
+        </p>
+      )}
+      <Dialog
+        open={open && !blocker}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (o) setSent(null);
+        }}
+      >
+        <DialogContent>
           <form onSubmit={submit} className="grid gap-4" noValidate>
             <DialogHeader>
-              <DialogTitle className="text-2xl">New task</DialogTitle>
+              <DialogTitle className="text-xl">New task</DialogTitle>
               <DialogDescription>
                 The agent gets a narrower permission just for this task. No new signature needed.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
-              <Label htmlFor={`${id}-d`} className="text-lg font-bold">
+              <Label htmlFor={`${id}-d`} className="text-lg font-semibold">
                 What should the worker do?
               </Label>
               <Input
@@ -143,13 +158,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 {...form.register("description")}
               />
               {errors.description && (
-                <p role="alert" className="font-semibold text-warn-soft-foreground">
+                <p role="alert" className="font-semibold">
                   {errors.description.message}
                 </p>
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`${id}-a`} className="text-lg font-bold">
+              <Label htmlFor={`${id}-a`} className="text-lg font-semibold">
                 Amount for this task (tUSD, up to {remaining} left in the mandate)
               </Label>
               <Input
@@ -163,14 +178,19 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 {...form.register("amount")}
               />
               {errors.amount && (
-                <p role="alert" className="font-semibold text-warn-soft-foreground">
+                <p role="alert" className="font-semibold">
                   {errors.amount.message}
                 </p>
               )}
             </div>
-            <p className="text-base text-muted-foreground">
+            <p className="text-base text-subtle">
               The agent will be told: "{composeTaskGoal(amount, worker, description)}"
             </p>
+            {failure && (
+              <p role="alert" className="border-l-2 border-ink pl-4 font-semibold">
+                {failure}
+              </p>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel

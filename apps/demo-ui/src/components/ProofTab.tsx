@@ -27,21 +27,23 @@ export function EvidenceChecks({ ev }: { ev: Evidence }) {
       ? v.contract_sha256 === contractNow && v.delivery_sha256 === deliveryNow
       : false;
   return (
-    <div className="mt-3 grid gap-2">
+    <div className="mt-3 grid">
       {ev.contract_sha256 ? (
         <HashCheck label="Contract" shown={ev.contract_sha256} recomputed={contractNow} />
       ) : (
-        <p className="text-base text-muted-foreground">Contract: not available yet.</p>
+        <p className="text-base text-subtle">Contract: not available yet.</p>
       )}
       {ev.delivery ? (
         <HashCheck label="Delivery" shown={ev.delivery.sha256} recomputed={deliveryNow} />
       ) : (
-        <p className="text-base text-muted-foreground">Delivery: nothing delivered yet.</p>
+        <p className="text-base text-subtle">Delivery: nothing delivered yet.</p>
       )}
       {v ? (
         <>
-          <div className="flex items-center gap-2 text-base">
-            Verifier package <Hash value={v.verifier_package_sha256} label="package hash" />
+          <div className="flex items-baseline gap-2 border-b border-rule-soft py-1.5 text-base">
+            <span aria-hidden>■</span>{" "}
+            <span className="text-sm font-semibold uppercase">Verifier package</span>{" "}
+            <Hash value={v.verifier_package_sha256} label="package hash" />
           </div>
           <HashCheck
             label="Verdict"
@@ -53,9 +55,9 @@ export function EvidenceChecks({ ev }: { ev: Evidence }) {
           <p className="text-base">{VERDICT_CAPTIONS[v.verdict]}</p>
         </>
       ) : (
-        <p className="text-base text-muted-foreground">Verdict: none signed yet.</p>
+        <p className="text-base text-subtle">Verdict: none signed yet.</p>
       )}
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-subtle">
         The verifier's signature itself is checked by the engine and the verifier, not here.
       </p>
     </div>
@@ -122,24 +124,27 @@ export function signersOf(
 
 export function SignersList({ signers }: { signers: Signer[] }) {
   return (
-    <ul className="grid gap-3" aria-label="Who signed what">
+    <ul
+      className="grid divide-y divide-rule-soft border-y border-rule"
+      aria-label="Who signed what"
+    >
       {signers.map((x) => (
-        <li key={x.role} className="grid gap-1">
-          <div className="flex items-center gap-2">
+        <li key={x.role} className="grid gap-1 py-2">
+          <div className="flex items-baseline gap-3">
             <RoleBadge role={x.role} />
             <span className="text-base">{x.what}</span>
           </div>
           {x.signature && x.id ? (
-            <div className="grid gap-0.5 pl-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2">
+            <div className="grid gap-0.5 text-sm text-subtle">
+              <span className="flex items-baseline gap-2">
                 key <Hash value={x.id} label={`${ROLES[x.role].label} key`} />
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex items-baseline gap-2">
                 signature <Hash value={x.signature} label={`${ROLES[x.role].label} signature`} />
               </span>
             </div>
           ) : (
-            <p className="pl-1 text-sm text-muted-foreground">Not signed yet.</p>
+            <p className="text-sm text-subtle">Not signed yet.</p>
           )}
         </li>
       ))}
@@ -168,11 +173,9 @@ export function ProofTab() {
           </div>
         )}
         <div aria-live="polite">
-          {!taskId && <p className="mt-2 text-muted-foreground">No task yet.</p>}
+          {!taskId && <p className="mt-2 text-subtle">No task yet.</p>}
           {taskId && q.isError && !ev && (
-            <p className="mt-2 text-muted-foreground">
-              Evidence is not available from the engine right now.
-            </p>
+            <p className="mt-2 text-subtle">Evidence is not available from the engine right now.</p>
           )}
           {ev && <EvidenceChecks ev={ev} />}
         </div>

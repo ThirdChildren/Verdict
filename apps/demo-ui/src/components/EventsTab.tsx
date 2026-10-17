@@ -4,6 +4,9 @@ import { ROLES, type Role, roleOfEvent } from "../lib/roles.js";
 import { useStore } from "../store.js";
 import { RoleBadge } from "./RoleBadge.js";
 
+const FILTER =
+  "cursor-pointer text-sm uppercase underline decoration-rule underline-offset-4 outline-none hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink aria-pressed:font-semibold aria-pressed:decoration-2 aria-pressed:decoration-ink";
+
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], {
     hour: "2-digit",
@@ -29,15 +32,15 @@ export function EventsTab() {
   return (
     <section aria-label="Protocol messages" className="grid gap-3">
       {events.length === 0 ? (
-        <p className="text-muted-foreground">No messages yet. They appear as the task moves.</p>
+        <p className="text-subtle">No messages yet. They appear as the task moves.</p>
       ) : (
         <>
-          <nav aria-label="Filter by sender" className="flex flex-wrap gap-2">
+          <nav aria-label="Filter by sender" className="flex flex-wrap gap-x-4 gap-y-1">
             <button
               type="button"
               aria-pressed={role === "all"}
               onClick={() => setRole("all")}
-              className={`rounded-full border px-3 py-1 text-sm ${role === "all" ? "border-primary bg-accent font-semibold" : ""}`}
+              className={FILTER}
             >
               All {events.length}
             </button>
@@ -47,25 +50,23 @@ export function EventsTab() {
                 type="button"
                 aria-pressed={role === r}
                 onClick={() => setRole(r)}
-                className={`rounded-full border px-3 py-1 text-sm ${role === r ? "border-primary bg-accent font-semibold" : ""}`}
+                className={FILTER}
               >
                 {ROLES[r].label} {n}
               </button>
             ))}
           </nav>
-          <ol className="grid gap-2" aria-live="polite">
+          <ol className="grid divide-y divide-rule-soft border-y border-rule" aria-live="polite">
             {shown.map((e) => (
-              <li key={e.seq} className="rounded-lg border p-2">
+              <li key={e.seq} className="py-2">
                 <details>
-                  <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
-                    <span className="tabular-nums text-muted-foreground">#{e.seq}</span>
+                  <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 text-sm">
+                    <span className="font-mono text-subtle">#{e.seq}</span>
                     <code className="font-mono">{e.type}</code>
                     <RoleBadge role={roleOfEvent(e)} />
-                    <span className="ml-auto tabular-nums text-muted-foreground">
-                      {clock(e.at)}
-                    </span>
+                    <span className="ml-auto font-mono text-subtle">{clock(e.at)}</span>
                   </summary>
-                  <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-all">
+                  <pre className="mt-2 max-h-64 overflow-auto border border-rule p-2 font-mono text-xs whitespace-pre-wrap break-all">
                     {JSON.stringify(e, null, 2)}
                   </pre>
                 </details>

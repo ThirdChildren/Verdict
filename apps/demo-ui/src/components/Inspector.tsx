@@ -1,4 +1,3 @@
-import { ListTree, ShieldCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventsTab } from "./EventsTab.js";
 import { ProofTab } from "./ProofTab.js";
@@ -10,12 +9,8 @@ export function Inspector({ mock }: { mock: boolean }) {
   return (
     <Tabs defaultValue="proof" className="gap-4">
       <TabsList className="w-full">
-        <TabsTrigger value="proof">
-          <ShieldCheck aria-hidden /> Proof
-        </TabsTrigger>
-        <TabsTrigger value="events">
-          <ListTree aria-hidden /> Events
-        </TabsTrigger>
+        <TabsTrigger value="proof">Proof</TabsTrigger>
+        <TabsTrigger value="events">Events</TabsTrigger>
       </TabsList>
       <TabsContent value="proof" className="grid gap-6">
         <ProofTab />

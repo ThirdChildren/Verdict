@@ -1,6 +1,4 @@
-import { Check, Copy } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /** Middle-truncated form of a long id: first 8 and last 6 characters. */
@@ -10,20 +8,18 @@ export function middle(value: string, head = 8, tail = 6): string {
 
 /** The one place hashes, ids and signatures are shown: mono, middle-truncated, full value in the title, copy button. */
 export function Hash(props: { value: string; label?: string; className?: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(props.value);
-      setCopied(true);
-      toast.success(`${props.label ?? "Value"} copied`);
-      setTimeout(() => setCopied(false), 1500);
+      setState("copied");
+      setTimeout(() => setState("idle"), 1500);
     } catch {
-      toast.error("Copy is not available in this browser.");
+      setState("failed");
     }
   };
-  const Icon = copied ? Check : Copy;
   return (
-    <span className={cn("inline-flex items-center gap-1", props.className)}>
+    <span className={cn("inline-flex items-baseline gap-2", props.className)}>
       <code className="font-mono text-sm" title={props.value}>
         {middle(props.value)}
       </code>
@@ -32,9 +28,11 @@ export function Hash(props: { value: string; label?: string; className?: string 
         onClick={copy}
         aria-label={`Copy ${props.label ?? "value"}`}
         title="Copy"
-        className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="cursor-pointer text-xs font-semibold uppercase underline decoration-rule underline-offset-4 outline-none hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
-        <Icon aria-hidden className="size-4" />
+        <span aria-live="polite">
+          {state === "copied" ? "Copied" : state === "failed" ? "Copy unavailable" : "Copy"}
+        </span>
       </button>
     </span>
   );

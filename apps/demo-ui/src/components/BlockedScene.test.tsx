@@ -4,12 +4,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BLOCK_CODES, BLOCK_TEMPLATES } from "@verdict/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { blockToast, isFreshBlock, shouldToastBlock } from "../lib/notify.js";
+import { isFreshBlock, shouldToastBlock } from "../lib/notify.js";
 import { BlockedScene } from "./BlockedScene.js";
+import { BLOCK_NOTICE_BODY, BLOCK_NOTICE_TITLE, BlockNotice } from "./BlockNotice.js";
 import { EmptyState } from "./EmptyState.js";
-
-const toastWarning = vi.hoisted(() => vi.fn());
-vi.mock("sonner", () => ({ toast: { warning: toastWarning } }));
 
 afterEach(cleanup);
 
@@ -58,21 +56,23 @@ describe("BlockedScene budget line", () => {
   });
 });
 
-describe("EmptyState and block toast", () => {
+describe("EmptyState and block notice", () => {
   it("offers one primary action", async () => {
     const onCreate = vi.fn();
     render(<EmptyState onCreate={onCreate} />);
     await userEvent.click(screen.getByRole("button", { name: "Create mandate" }));
     expect(onCreate).toHaveBeenCalled();
   });
-  it("raises an amber toast that says nothing moved", () => {
-    blockToast();
-    expect(toastWarning).toHaveBeenCalledWith(
-      "Blocked by your mandate",
-      expect.objectContaining({ description: expect.stringContaining("No funds moved") }),
-    );
+  it("shows an in-place notice that says nothing moved, and can be dismissed", async () => {
+    const onDismiss = vi.fn();
+    render(<BlockNotice onDismiss={onDismiss} />);
+    expect(screen.getByText(BLOCK_NOTICE_TITLE)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("No funds moved");
+    expect(BLOCK_NOTICE_BODY).toContain("Nothing was signed. No funds moved.");
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(onDismiss).toHaveBeenCalled();
   });
-  it("skips the toast when that blocked row is already selected", () => {
+  it("skips the notice when that blocked row is already selected", () => {
     expect(shouldToastBlock("block:7", 7)).toBe(false);
     expect(shouldToastBlock("task_x", 7)).toBe(true);
   });

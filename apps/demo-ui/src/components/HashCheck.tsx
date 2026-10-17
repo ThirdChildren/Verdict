@@ -1,5 +1,3 @@
-import { CheckCircle2, TriangleAlert } from "lucide-react";
-
 import { Hash, middle } from "./Hash.js";
 
 /** Shows a hash next to a result recomputed in the browser: matches -> verified (blue), differs -> MISMATCH (amber). */
@@ -21,23 +19,20 @@ export function HashCheck({
 }) {
   const ok = recomputed !== null && (matches ?? recomputed === shown);
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
-      <span className="font-semibold">{label}</span>
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-rule-soft py-1.5 text-base">
+      <span aria-hidden>{ok ? "■" : "▲"}</span>
+      <span className="text-sm font-semibold uppercase">{label}</span>
       <Hash value={shown} label={label} />
       {recomputed === null ? (
-        <span className="text-muted-foreground">Cannot check yet: data missing.</span>
+        <span className="text-subtle">Cannot check yet: data missing.</span>
       ) : ok ? (
-        <span className="inline-flex items-center gap-1 font-semibold text-info-soft-foreground">
-          <CheckCircle2 aria-hidden className="size-5" />
-          verified in your browser
-        </span>
+        <span className="font-semibold">verified in your browser</span>
       ) : (
-        <span className="inline-flex items-center gap-1 rounded bg-warn-soft px-2 font-bold text-warn-soft-foreground">
-          <TriangleAlert aria-hidden className="size-5" />
+        <span className="font-semibold">
           MISMATCH{recomputed === shown ? "" : `: this browser computed ${middle(recomputed)}`}
         </span>
       )}
-      {note && <span className="text-sm text-muted-foreground">{note}</span>}
+      {note && <span className="text-sm text-subtle">{note}</span>}
     </div>
   );
 }

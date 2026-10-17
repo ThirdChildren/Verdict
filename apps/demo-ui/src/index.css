@@ -54,23 +54,6 @@
   --color-border: var(--rule-soft);
   --color-input: var(--rule);
   --color-ring: var(--ink);
-  /* Transitional, monochrome: components not yet migrated (E12b/E12c) still reference these. Delete with them. */
-  --color-info: var(--signal);
-  --color-info-soft: var(--surface);
-  --color-info-soft-foreground: var(--ink);
-  --color-info-border: var(--rule);
-  --color-warn: var(--ink);
-  --color-warn-soft: var(--surface);
-  --color-warn-soft-foreground: var(--ink);
-  --color-warn-border: var(--rule);
-  --color-ok: var(--ink);
-  --color-ok-soft: var(--surface);
-  --color-ok-soft-foreground: var(--ink);
-  --color-ok-border: var(--rule);
-  --color-danger: var(--ink);
-  --color-danger-soft: var(--surface);
-  --color-danger-soft-foreground: var(--ink);
-  --color-danger-border: var(--rule);
   /* Square everything, no shadows. */
   --radius-xs: 0;
   --radius-sm: 0;
@@ -89,8 +72,6 @@
   /* Two faces only. Plex is used when installed; the fallbacks are system faces, so nothing is fetched at runtime. */
   --font-sans: "IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
-  /* Transitional alias: unmigrated components still say font-display; it is the grotesk now. */
-  --font-display: var(--font-sans);
   /* Type scale: 13 / 14 / 16 / 20 / 28 / 40 px and two weights (400, 600). Nothing else is reachable. */
   --text-xs: 0.8125rem;
   --text-sm: 0.875rem;

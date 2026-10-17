@@ -1,5 +1,4 @@
 import { uiEventSchema } from "@verdict/protocol";
-import { Bot, FlaskConical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   fetchWorkerConfig,
@@ -170,10 +169,8 @@ export function WorkerLane() {
   const live = useLiveStream();
   const last = task?.attempts?.[task.attempts.length - 1];
   return (
-    <section aria-label="Worker" className="rounded-xl border-2 border-foreground bg-card p-5">
-      <h2 className="flex items-center gap-2 text-xl font-bold">
-        <Bot aria-hidden className="size-6" /> Worker
-      </h2>
+    <section aria-label="Worker" className="border-y-2 border-ink py-3">
+      <h2 className="text-xl font-semibold">Worker</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
         {task?.state === "GENERATING" &&
@@ -198,22 +195,19 @@ export function WorkerLane() {
         <p
           role="alert"
           data-testid="task-stalled"
-          className="mt-2 rounded-lg border-2 border-warn-border bg-warn-soft p-2 font-semibold text-warn-soft-foreground"
+          className="mt-2 border-l-2 border-ink pl-3 font-semibold"
         >
           {stalled}
         </p>
       )}
       {live && (
-        <section
-          className="mt-3 rounded-lg border-2 border-border bg-muted p-3"
-          aria-label="Live model output"
-        >
-          <p className="text-base font-semibold">
+        <section className="mt-3 border border-rule p-3" aria-label="Live model output">
+          <p className="font-mono text-base font-semibold">
             Attempt {live.attempt}: {live.done ? "finished" : "writing"} · {live.tokens} tokens
             {live.tps !== null ? ` · ${live.tps} tokens/s` : ""}
           </p>
           {live.thinking && (
-            <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-sm italic text-muted-foreground">
+            <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-sm italic text-subtle">
               {live.thinking}
             </pre>
           )}
@@ -228,7 +222,7 @@ export function WorkerLane() {
         <p
           aria-live="polite"
           data-testid="toggle-badge"
-          className="mt-2 inline-block rounded-lg border-2 border-danger-border bg-danger-soft px-3 py-1 font-bold text-danger-soft-foreground"
+          className="mt-2 border-l-2 border-ink pl-3 font-semibold"
         >
           {toggleLabels(config ?? undefined).join(" + ")} - applies from the next task
         </p>
@@ -239,36 +233,34 @@ export function WorkerLane() {
         </p>
       )}
       {task?.sabotaged && (
-        <p className="mt-2 rounded-lg border-2 border-danger-border bg-danger-soft p-2 font-semibold">
+        <p className="mt-2 border-l-2 border-ink pl-3 font-semibold">
           This delivery came from the sabotaged worker (demo switch). It is broken on purpose.
         </p>
       )}
-      <label className="mt-3 flex items-center gap-3 text-lg font-semibold">
+      <label className="mt-3 flex items-center gap-3 text-base font-semibold">
         <input
           type="checkbox"
-          className="size-6"
+          className="size-5 accent-ink"
           checked={config?.sabotaged ?? false}
           disabled={config === null}
           onChange={(e) => void toggle({ sabotaged: e.target.checked })}
         />
-        <FlaskConical aria-hidden className="size-5" />
         Sabotaged worker (demo only): delivers a broken file on purpose, to show the refund
       </label>
       {config?.disappears !== undefined && (
-        <label className="mt-2 flex items-center gap-3 text-lg font-semibold">
+        <label className="mt-2 flex items-center gap-3 text-base font-semibold">
           <input
             type="checkbox"
-            className="size-6"
+            className="size-5 accent-ink"
             checked={config.disappears}
             onChange={(e) => void toggle({ disappears: e.target.checked })}
           />
-          <FlaskConical aria-hidden className="size-5" />
           Worker disappears (demo only): never claims and never cancels, so the funds come back only
           when the lock runs out
         </label>
       )}
       {error && (
-        <p role="alert" className="mt-2 font-semibold text-danger-soft-foreground">
+        <p role="alert" className="mt-2 font-semibold">
           {error}
         </p>
       )}
