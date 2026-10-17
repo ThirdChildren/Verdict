@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     passWithNoTests: true,
     include: ["{packages,services,apps}/*/src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
+    // tsc -b emits the tests into dist/; never collect those stale copies (a bare `vitest` in a package did).
+    exclude: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/dist-types/**"],
   },
 });
