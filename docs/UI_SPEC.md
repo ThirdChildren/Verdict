@@ -1,6 +1,6 @@
 # demo-ui specification (industrial projector UI)
 
-An instrument panel printed on good paper: one ink, one paper, 1px rules, words instead of icons, no motion except the live token stream and progress rules. Behaviour, shortcuts and copy are unchanged from the story-first design; only the skin and layout differ. Binding directive: `workspace/features/E12-ui-industrial-directive.md`.
+An instrument panel printed on good paper: one ink, one paper, 1px rules, words instead of icons, no motion except the live token stream and progress rules. Behaviour, shortcuts and copy are unchanged from the story-first design; only the skin and layout differ.
 
 ## Stack (what is imported)
 React 19, Vite, Tailwind v4 (`@tailwindcss/vite`), Radix (`radix-ui`: focus trap, ESC, aria kept), TanStack Query v5 (REST mutations and polling), Zustand (`store.ts`, fed by engine, worker and verifier WebSockets), React Hook Form + zod.
