@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "../store.js";
 import {
   type Chain,
   type Evidence,
+  type Funds,
   fetchChain,
   fetchDemoToggles,
   fetchEvidence,
+  fetchFunds,
   fetchTasks,
   newTask,
   proposeMandate,
@@ -18,6 +20,7 @@ import {
 export const keys = {
   tasks: ["tasks"] as const,
   chain: ["chain"] as const,
+  funds: ["funds"] as const,
   evidence: (id: string) => ["evidence", id] as const,
 };
 
@@ -103,4 +106,35 @@ export function useDemoToggles(): boolean {
     retry: false,
   });
   return q.data === true;
+}
+
+/**
+ * The buyer node's tUSD (spendable in the channel, reserved by open tasks, available to delegate) from GET /api/funds.
+ * Refetched when the wallet or the ledger report a change (payment status, budget, claim, refund) and every 15 s as a fallback.
+ */
+export function useFunds(enabled: boolean) {
+  const q = useQuery<Funds>({
+    queryKey: keys.funds,
+    queryFn: fetchFunds,
+    enabled,
+    refetchInterval: enabled ? 15_000 : false,
+    retry: false,
+  });
+  const stamp = useStore((s) =>
+    [
+      s.budget?.reserved,
+      s.budget?.committed,
+      Object.values(s.payments).join(","),
+      s.claimed.length,
+      s.refunded.length,
+    ].join("|"),
+  );
+  const last = useRef(stamp);
+  const { refetch } = q;
+  useEffect(() => {
+    if (last.current === stamp) return;
+    last.current = stamp;
+    if (enabled) void refetch();
+  }, [stamp, enabled, refetch]);
+  return q;
 }
