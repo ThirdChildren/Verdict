@@ -36,7 +36,7 @@ fnm install 24 && fnm default 24
 fnm install 22   # Node 22 only for the setup-only tUSD issuer (infra/regtest/issuer, ADR-020)
 npm install -g corepack@latest && corepack enable
 ```
-pnpm itself gets pinned per repo through the `packageManager` field (scaffold step P1.1).
+pnpm itself gets pinned per repo through the `packageManager` field (the `packageManager` field).
 Check: `node -v` (v24.x) and `pnpm -v`. The issuer needs Node 22.23.x: `fnm use 22` in its folder, or put its `bin` on PATH (`fnm` installs under `~/.local/share/fnm/node-versions/`).
 
 ### 4. Rust (needed only to compile the RLN binding at install time)
@@ -80,9 +80,9 @@ Check: the start finishes without errors, and `ss -ltn | grep :3000` is empty af
 
 ### 7. Things the spikes download (they happen in P0, listed here so nothing is forgotten)
 - `pnpm install` with the RLN binding allowed: compiles RLN in Rust (expect several minutes or more).
-  - Measured 2026-10-10 (P2.2): `RLN_NODE_SOURCE_DIR=../rgb-lightning-node pnpm install` took 1.7 s because the pnpm store already held the addon built during P0.3 (no Rust compile ran). The original from-scratch compile time was not recorded; a cold store means the full ~20 min build. Run with `RLN_NODE_SOURCE_DIR` set to the local checkout to avoid cloning.
+  - Measured 2026-10-10: `RLN_NODE_SOURCE_DIR=../rgb-lightning-node pnpm install` took 1.7 s because the pnpm store already held the addon built during the first install (no Rust compile ran). The original from-scratch compile time was not recorded; a cold store means the full ~20 min build. Run with `RLN_NODE_SOURCE_DIR` set to the local checkout to avoid cloning.
   - `@qvac/sdk` 0.21.0 is now a devDependency of `@verdict/llm` (about 5 min to install).
-- QVAC models for buyer and worker (spike P0.2): note the cache path it prints, for the cleanup later.
+- QVAC models for buyer and worker: note the cache path it prints, for the cleanup later.
 - Docker/Podman images for regtest (step 6).
 Final check before the event: `scripts/doctor.sh` is all green (roles: `--role legion` is the default on Linux, `--role verifier` or `pnpm doctor:verifier` on the Mac), and `pnpm install --frozen-lockfile --offline` works.
 
@@ -105,7 +105,7 @@ brew install fnm git
 fnm install 24 && fnm default 24
 npm install -g corepack@latest && corepack enable
 ```
-No Rust, no containers, no models. `sandbox-exec` is built into macOS (spike P0.5 confirms it works).
+No Rust, no containers, no models. `sandbox-exec` is built into macOS (`pnpm verifier:selftest` confirms it works).
 Check: `node -v`, `pnpm -v`, and the Mac can reach the Legion over cable or hotspot (`ping <legion-ip>`).
 
 ---

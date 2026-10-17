@@ -91,7 +91,7 @@ Escrow needs HODL invoices, and only the UTEXO fork of `rgb-lightning-node` prov
 | Frontend | Vite, React 19, Tailwind v4, shadcn/ui |
 | Tests | Vitest, fast-check, Biome, Playwright screenshots |
 
-Installed and working before the event on the Legion (Fedora, RTX 3080): the full stack above, the regtest environment, both QVAC models, the Rust build of the RGB Lightning binding. On the Mac (macOS 26, Node 24): the verifier only, with `pnpm verifier:selftest` passing 9 of 9 sandbox fixtures (1 skipped by design) on 17 October.
+Installed and working before the event on the Legion (Fedora, RTX 3080): the full stack above, the regtest environment, both QVAC models, the Rust build of the RGB Lightning binding. On the Mac (macOS 26, Node 24): the verifier only, with `pnpm verifier:selftest` passing 9 of 10 sandbox fixtures (1 skipped by design) on 17 October.
 
 ## How to run
 
@@ -118,6 +118,8 @@ Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VE
 - `4de913e` `fcf89fc` Demo UI redesigned to an industrial, old-school layout: one ink, one paper, one accent; no rounded corners, pills, icons or tinted status cards; grotesk plus monospace with tabular numerals; fonts no longer fetched from the network (the venue has none); header as a one-line budget ledger; the five escrow steps as ledger rows; refusals and outcomes as plain ruled blocks. Behaviour, shortcuts and copy unchanged.
 - `9f8facb` 54 protocol negative-vector tests: envelope mutation never verifies, signature encoding and malleability, dirhash edge cases, payee attenuation, amount rejection.
 - `abbfd82` README run steps with the real prerequisites (Node 24, corepack, frozen install) and the second-machine verifier.
+- `c761954` `scripts/doctor.sh` with roles: the verifier role checks only what a second machine needs and passes on macOS; the legion role adds the model cache, the Node 22 issuer and portable port and GPU checks.
+- `66b5607` macOS deliveries can no longer read the repository checkout; the macOS sandbox limits are documented.
 - `a6425ab` Repo-wide data-dir inventory test tolerates missing workspace folders during the layered build.
 
 ## What is mocked, simulated or hard-coded
@@ -134,4 +136,4 @@ Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VE
 
 ## Honesty and safety
 
-No secrets in this repository: seeds and keys live in `~/.verdict-data`, ignored by git. Known limits will be stated in `docs/LIMITS.md`. If something on stage is a recording, we say so.
+No secrets in this repository: seeds and keys live in `~/.verdict-data`, ignored by git. Known limits are stated in `docs/LIMITS.md`. If something on stage is a recording, we say so.

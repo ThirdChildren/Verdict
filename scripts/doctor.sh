@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Verdict doctor. Checks only; installs and creates nothing. Exit 1 if any check fails.
+# Verdict doctor. Checks only; creates no files or directories (the legion role runs an offline frozen install
+# to prove the store is complete). Exit 1 if any check fails.
 # Roles: verifier (Mac or any machine running only the verifier), legion (full stack).
 set -u
 
