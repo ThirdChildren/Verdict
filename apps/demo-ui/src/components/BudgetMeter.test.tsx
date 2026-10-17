@@ -21,7 +21,7 @@ describe("BudgetMeter", () => {
     expect(group.textContent).toMatch(/Paid\s*1\.20/);
     expect(group.textContent).toMatch(/Locked\s*0\.00/);
     expect(group.textContent).toMatch(/Left\s*3\.80/);
-    expect(group.textContent).toContain("of 5.00 tUSD");
+    expect(group.textContent).toContain("/ 5.00 tUSD");
     expect(screen.getByRole("img").getAttribute("aria-label")).toContain("Paid 1.20");
   });
   it("shows locked funds while the escrow is held", () => {

@@ -1,7 +1,4 @@
-import { TriangleAlert } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
@@ -124,7 +121,7 @@ export function App() {
       />
       <div className="flex min-h-0 flex-1">
         {state.root && (
-          <aside aria-label="Tasks" className="w-64 shrink-0 border-r p-4">
+          <aside aria-label="Tasks" className="w-64 shrink-0 border-r border-rule p-4">
             <TaskRail
               state={state}
               descriptions={descriptions}
@@ -137,52 +134,37 @@ export function App() {
           className={`grid min-w-0 flex-1 gap-6 overflow-auto p-8 ${state.root ? "content-start" : "place-content-center"}`}
         >
           {down && (
-            <Alert variant="warn" className="p-4">
-              <TriangleAlert aria-hidden />
-              <AlertTitle className="line-clamp-none text-lg font-bold">
-                Engine disconnected
-              </AlertTitle>
-              <AlertDescription className="text-warn-soft-foreground">
+            <div role="alert" className="border-y-2 border-ink p-4">
+              <p className="text-lg font-semibold">Engine disconnected</p>
+              <p>
                 Nothing on this screen is live until it reconnects. No funds can move while it is
                 down.
-              </AlertDescription>
-            </Alert>
+              </p>
+            </div>
           )}
           {state.root ? (
-            <motion.div
-              key={state.selected ?? "none"}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18 }}
-            >
+            <div key={state.selected ?? "none"}>
               <Stage state={state} live={live} descriptions={descriptions} />
-            </motion.div>
+            </div>
           ) : (
             <EmptyState onCreate={() => setWizardOpen(true)} />
           )}
         </main>
-        <AnimatePresence>
-          {inspector && wide && (
-            <motion.aside
-              key="inspector"
-              aria-label="Details"
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 16 }}
-              transition={{ duration: 0.18 }}
-              className="w-[21.5rem] shrink-0 overflow-auto border-l p-4"
-            >
-              <Inspector mock={mock} />
-            </motion.aside>
-          )}
-        </AnimatePresence>
+        {inspector && wide && (
+          <aside
+            aria-label="Details"
+            className="w-[21.5rem] shrink-0 overflow-auto border-l border-rule p-4"
+          >
+            <Inspector mock={mock} />
+          </aside>
+        )}
       </div>
       {demoEnabled && <DemoConsole open={consoleOpen} onClose={() => setConsoleOpen(false)} />}
       {!wide && (
         <Sheet open={inspector} onOpenChange={setInspector}>
-          <SheetContent side="right" className="w-[90vw] overflow-auto p-4 sm:max-w-md">
+          <SheetContent side="right" className="overflow-auto p-4">
             <SheetHeader className="p-0">
-              <SheetTitle className="text-2xl">Details</SheetTitle>
+              <SheetTitle className="text-xl">Details</SheetTitle>
               <SheetDescription>
                 Technical view of the worker, the verifier and the evidence.
               </SheetDescription>

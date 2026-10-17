@@ -1,13 +1,12 @@
 import { cn } from "@/lib/utils";
 
+/** A key is a mono character in a thin box, nothing more. */
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
   return (
     <kbd
       data-slot="kbd"
       className={cn(
-        "pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none",
-        "[&_svg:not([class*='size-'])]:size-3",
-        "[[data-slot=tooltip-content]_&]:bg-background/20 [[data-slot=tooltip-content]_&]:text-background dark:[[data-slot=tooltip-content]_&]:bg-background/10",
+        "pointer-events-none inline-flex h-6 w-fit min-w-6 items-center justify-center border border-rule px-1 font-mono text-sm font-semibold text-ink select-none",
         className,
       )}
       {...props}

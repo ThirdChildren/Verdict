@@ -1,5 +1,3 @@
-import { CheckCircle2, Lock, Wallet } from "lucide-react";
-import { motion } from "motion/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toMinor } from "../lib/money.js";
 import type { AppState, BudgetView } from "../store.js";
@@ -8,22 +6,19 @@ const SEGMENTS = [
   {
     key: "committed",
     label: "Paid",
-    Icon: CheckCircle2,
-    bar: "bg-ok",
+    bar: "bg-ink",
     tip: "Paid: already sent to workers.",
   },
   {
     key: "reserved",
     label: "Locked",
-    Icon: Lock,
-    bar: "bg-warn",
+    bar: "bg-subtle",
     tip: "Locked: held in escrow for work in progress; returns to you if the task fails.",
   },
   {
     key: "remaining",
     label: "Left",
-    Icon: Wallet,
-    bar: "bg-border",
+    bar: "bg-rule-soft",
     tip: "Left: still available for new tasks under this mandate.",
   },
 ] as const;
@@ -40,6 +35,7 @@ export function segmentWidths(b: BudgetView, precision: number): Record<string, 
   return { committed: pct(m.committed), reserved: pct(m.reserved), remaining: pct(m.remaining) };
 }
 
+/** The budget as one ledger line in mono (PAID 1.20 · LOCKED 0.00 · LEFT 3.80 / 5.00 tUSD) and a plain 4px rule. */
 export function BudgetMeter({ state }: { state: AppState }) {
   const b = state.budget;
   if (!state.root) {
@@ -49,26 +45,29 @@ export function BudgetMeter({ state }: { state: AppState }) {
   return (
     <section aria-label="Budget" className="min-w-fit flex-1">
       <TooltipProvider>
-        <dl className="flex items-end gap-x-8 whitespace-nowrap" aria-live="polite">
-          {SEGMENTS.map((s) => (
-            <Tooltip key={s.key}>
-              <TooltipTrigger asChild>
-                <div>
-                  <dt className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <s.Icon aria-hidden className="size-4" />
-                    {s.label}
-                  </dt>
-                  <dd className="text-2xl leading-8 tabular-nums">{b ? b[s.key] : "—"}</dd>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>{s.tip}</TooltipContent>
-            </Tooltip>
+        <p
+          className="flex flex-wrap items-baseline gap-x-2 font-mono text-base whitespace-nowrap uppercase"
+          aria-live="polite"
+        >
+          {SEGMENTS.map((s, i) => (
+            <span key={s.key} className="flex items-baseline gap-x-2">
+              {i > 0 && <span aria-hidden>·</span>}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <span className="text-subtle">{s.label}</span>{" "}
+                    <span className="text-xl font-semibold">{b ? b[s.key] : "—"}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{s.tip}</TooltipContent>
+              </Tooltip>
+            </span>
           ))}
-          <div className="pb-0.5 text-sm text-muted-foreground">of {state.root.max_total} tUSD</div>
-        </dl>
+          <span className="text-subtle">/ {state.root.max_total} tUSD</span>
+        </p>
       </TooltipProvider>
       <div
-        className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-border"
+        className="mt-1 flex h-1 w-full overflow-hidden bg-rule-soft"
         role="img"
         aria-label={
           b
@@ -78,17 +77,12 @@ export function BudgetMeter({ state }: { state: AppState }) {
       >
         {w &&
           SEGMENTS.filter((s) => s.key !== "remaining").map((s) => (
-            <motion.div
-              key={s.key}
-              className={s.bar}
-              initial={false}
-              animate={{ width: `${w[s.key]}%` }}
-              transition={{ duration: 0.5 }}
-            />
+            <div key={s.key} className={s.bar} style={{ width: `${w[s.key]}%` }} />
           ))}
       </div>
       {state.confirming.length > 0 && (
-        <p role="status" className="mt-1 text-sm text-warn-soft-foreground">
+        <p role="status" className="mt-1 text-sm font-semibold">
+          <span aria-hidden>▲ </span>
           Payment being confirmed: the amount stays held until the wallet reports.
         </p>
       )}

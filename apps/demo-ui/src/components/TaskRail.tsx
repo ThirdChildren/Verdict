@@ -8,21 +8,20 @@ import type { Live } from "./WorkerLane.js";
 function Row({ row, selected }: { row: RailRow; selected: boolean }) {
   const select = useStore((s) => s.select);
   return (
-    <li>
+    <li className="border-b border-rule-soft">
       <button
         type="button"
         onClick={() => select(row.key)}
         aria-current={selected ? "true" : undefined}
-        className={`grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg p-2 text-left hover:bg-muted ${selected ? "bg-secondary" : ""}`}
+        className={`grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 border-l-2 px-2 py-2 text-left hover:bg-surface ${selected ? "border-ink bg-surface" : "border-transparent"}`}
       >
-        <span className="flex items-baseline gap-2">
-          <span className="text-sm tabular-nums text-muted-foreground">#{row.n}</span>
-          <span className="truncate text-base">{row.label}</span>
-        </span>
-        <span className="flex items-center justify-between gap-2">
+        <span className="font-mono text-sm text-subtle">#{row.n}</span>
+        <span className="truncate text-base">{row.label}</span>
+        <span />
+        <span className="col-start-2">
           <StatusChip chip={row.chip} />
-          <span className="text-sm tabular-nums">{row.amount ? `${row.amount} tUSD` : ""}</span>
         </span>
+        <span className="font-mono text-sm">{row.amount ? `${row.amount} tUSD` : ""}</span>
       </button>
     </li>
   );
@@ -49,11 +48,11 @@ export function TaskRail(props: {
       <nav aria-label="Tasks" className="min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           {rows.length === 0 ? (
-            <p className="text-base text-muted-foreground">
+            <p className="text-base text-subtle">
               No tasks yet. Start one and it will appear here, newest on top.
             </p>
           ) : (
-            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
+            <ul className="grid grid-cols-[minmax(0,1fr)] border-t border-rule">
               {rows.map((r) => (
                 <Row key={r.key} row={r} selected={r.key === selected} />
               ))}

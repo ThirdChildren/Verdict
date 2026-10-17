@@ -1,7 +1,6 @@
 import type { RootCapability } from "@verdict/protocol";
-import { CircleSlash, ShieldCheck, TimerOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { WordButton } from "@/components/ui/word-button";
 
 export type MandateStatus = "none" | "active" | "expired";
 
@@ -23,7 +22,6 @@ export function MandatePill(props: { root: RootCapability | null; onClick: () =>
     return () => clearInterval(id);
   }, []);
   const st = mandateStatus(props.root, now);
-  const Icon = st === "active" ? ShieldCheck : st === "expired" ? TimerOff : CircleSlash;
   const text =
     st === "active" && props.root
       ? `Mandate · ${timeLeft(props.root.expires_at, now)}`
@@ -31,18 +29,13 @@ export function MandatePill(props: { root: RootCapability | null; onClick: () =>
         ? "Mandate expired"
         : "No mandate";
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
+    <WordButton
       onClick={props.onClick}
       title="Show the rules of this mandate (m)"
-      className={
-        st === "active" ? "text-muted-foreground" : "bg-warn-soft text-warn-soft-foreground"
-      }
+      className={st === "active" ? "" : "font-semibold decoration-2 decoration-ink"}
     >
-      <Icon aria-hidden />
+      <span aria-hidden>{st === "active" ? "■" : "▲"} </span>
       {text}
-    </Button>
+    </WordButton>
   );
 }
