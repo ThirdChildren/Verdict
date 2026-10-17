@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/wallet"
+    },
+    {
+      "path": "../../packages/llm"
+    },
+    {
+      "path": "../../packages/http-local"
+    },
+    {
+      "path": "../verifier"
+    }
+  ]
+}

@@ -11,6 +11,7 @@
     { "path": "packages/llm" },
     { "path": "services/capability-engine" },
     { "path": "services/buyer-agent" },
+    { "path": "services/worker" },
     { "path": "services/verifier" },
     { "path": "scripts" }
   ]
