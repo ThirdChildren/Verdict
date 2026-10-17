@@ -194,3 +194,54 @@ describe("mandate word in the header", () => {
     ).toBe("Mandate · expired");
   });
 });
+
+describe("E29 QA additions", () => {
+  it("AC7: MANDATE_RETIRED then CAP_ROOT selects the new mandate; the rail shows none of the old tasks", () => {
+    const s = loaded();
+    const [, retired] = sortedMandates(s.mandates);
+    useStore.getState().selectMandate(retired?.hash ?? "");
+    expect(Object.keys(scopeLists(useStore.getState(), retired?.hash ?? null).tasks)).toHaveLength(
+      2,
+    );
+    const root = s.root;
+    if (!root) throw new Error("no root");
+    const newId = "cap_8888888888888888";
+    useStore.getState().retire({
+      cap_hash: newId,
+      retired: [root.cap_id],
+      reason: "The previous mandate was retired.",
+    });
+    expect(useStore.getState().selectedMandate).toBe(retired?.hash); // retirement alone never moves it
+    const next = reduce(useStore.getState(), {
+      seq: useStore.getState().lastSeq + 1,
+      at: "2026-10-18T18:00:00Z",
+      type: "CAP_ROOT",
+      data: { ...root, cap_id: newId },
+    } as UiEvent);
+    expect(next.selectedMandate).toBe(next.rootHash);
+    expect(next.selectedMandate).not.toBe(s.rootHash);
+    expect(railRows({ ...next, ...scopeLists(next, next.selectedMandate) })).toHaveLength(0);
+    expect(next.selected).toBeNull();
+  });
+  it("AC9: hydration with malformed rows keeps the good ones and does not throw", () => {
+    useStore.setState({ ...initialState, mandates: new Map() });
+    const good = (history.mandates as { mandates: Record<string, unknown>[] }).mandates;
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      const bad = [
+        { ...good[0], figures: undefined },
+        { ...good[1], hash: undefined },
+        { ...good[1], figures: { paid: "1.20" } },
+      ];
+      const mixed = { mandates: [bad[0], good[0], bad[1], bad[2], good[1]] };
+      expect(() =>
+        useStore.getState().hydrate(parseMandates(mixed), parseTaskRoots({ tasks: [{}, null, 3] })),
+      ).not.toThrow();
+      const hashes = [...useStore.getState().mandates.keys()].sort();
+      expect(hashes).toEqual([good[0]?.hash, good[1]?.hash].sort());
+    } finally {
+      console.warn = warn;
+    }
+  });
+});

@@ -309,3 +309,129 @@ test("a retired root with no snapshot reports approximate figures", async () => 
   expect(a.figures).toEqual({ paid: "1.20", locked: "0.00", left: "0.00", approximate: true });
   await c.app.close();
 });
+
+// ---- E29 QA additions: AC2 precision, AC4 security, input hardening ----
+
+const cents = (v: string) => BigInt(v.replace(".", ""));
+type Fig = { paid: string; locked: string; left: string };
+const sums = (f: Fig, ceiling: string) =>
+  expect(cents(f.paid) + cents(f.locked) + cents(f.left)).toBe(cents(ceiling));
+type Row = { hash: string; ceiling: string; figures: Fig; status: string };
+const rows = async (s: S) =>
+  ((await s.app.inject({ method: "GET", url: "/api/mandates" })).json() as { mandates: Row[] })
+    .mandates;
+const count = (s: S, table: string) =>
+  (s.ledger as unknown as { db: { prepare: (q: string) => { get: () => { n: number } } } }).db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table}`)
+    .get().n;
+
+test("AC2: retired snapshot is byte-identical after later settles/fails on other roots and on its in-flight child", async () => {
+  const c = await twoMandates();
+  const snap = async () => JSON.stringify((await rows(c)).find((m) => m.hash === c.hashA));
+  const before = await snap();
+  const a = JSON.parse(before) as Row;
+  sums(a.figures, a.ceiling); // at the moment it was taken
+  expect(a.figures).toEqual({ paid: "1.20", locked: "1.00", left: "2.80" });
+  const kid = hex(4242);
+  c.ledger.registerCapability(
+    { ...k.child, max_total: "4.00", max_payments: 10 } as ChildCapability,
+    kid,
+    c.hashB,
+  );
+  const t1 = seedTask(c.ledger, kid, 100n);
+  const t2 = seedTask(c.ledger, kid, 60n);
+  const t3 = seedTask(c.ledger, kid, 40n);
+  c.ledger.applyPaymentStatus(t1.ph, "Settled", k.NOW);
+  c.ledger.applyPaymentStatus(t2.ph, "Failed", k.NOW);
+  c.ledger.applyPaymentStatus(t3.ph, "Settled", k.NOW);
+  // the in-flight child of the retired root fails; payments already final refuse the transition
+  const known = new Set([t1.ph, t2.ph, t3.ph]);
+  const open = c.ledger.listPayments().filter((p) => !known.has(p.paymentHash));
+  let failed = 0;
+  for (const p of open) {
+    try {
+      c.ledger.applyPaymentStatus(p.paymentHash, "Failed", k.NOW);
+      failed++;
+    } catch {
+      // already settled
+    }
+  }
+  expect(failed).toBe(1);
+  expect(await snap()).toBe(before);
+  const b = (await rows(c)).find((m) => m.hash === c.hashB);
+  expect(b?.status).toBe("active");
+  if (b) sums(b.figures, b.ceiling);
+  // the active root's invariant also holds mid-flight
+  seedTask(c.ledger, kid, 25n);
+  const b2 = (await rows(c)).find((m) => m.hash === c.hashB);
+  if (b2) sums(b2.figures, b2.ceiling);
+  expect(b2?.figures.locked).toBe("0.25");
+  expect(await snap()).toBe(before);
+  await c.app.close();
+});
+
+test("AC4: a task or child derivation under the retired root is refused and writes no row", async () => {
+  const c = await twoMandates();
+  const tables = ["offers", "accepted_intents", "reservations", "capabilities"];
+  const snapshot = () => tables.map((t) => count(c, t));
+  const before = snapshot();
+  const tasksBefore = (await c.app.inject({ method: "GET", url: "/api/tasks" })).json();
+  for (const amount of ["1.00", "0.01"]) {
+    const r = await c.app.inject({
+      method: "POST",
+      url: "/api/mandate/task",
+      payload: { root_hash: c.hashA, amount },
+    });
+    expect(r.statusCode).toBe(422);
+    expect(r.json()).toMatchObject({ ok: false, code: "CAPABILITY_REVOKED" });
+  }
+  expect(snapshot()).toEqual(before);
+  expect((await c.app.inject({ method: "GET", url: "/api/tasks" })).json()).toEqual(tasksBefore);
+  await c.app.close();
+});
+
+test("input hardening: bad ?mandate values are 400 or empty, never 500, and bodies hold no secrets", async () => {
+  const c = await twoMandates();
+  const bad = [
+    "A".repeat(64),
+    "a".repeat(63),
+    "a".repeat(65),
+    "x".repeat(64),
+    "'; DROP TABLE offers; --",
+    "' OR '1'='1",
+    `${c.hashA}' OR 1=1 --`,
+    "%00",
+    "../etc/passwd",
+  ];
+  for (const v of bad) {
+    const r = await c.app.inject({
+      method: "GET",
+      url: `/api/tasks?mandate=${encodeURIComponent(v)}`,
+    });
+    expect(r.statusCode, v).toBe(400);
+  }
+  const arr = await c.app.inject({
+    method: "GET",
+    url: `/api/tasks?mandate=${c.hashA}&mandate=${c.hashB}`,
+  });
+  expect(arr.statusCode).toBe(400);
+  const unknown = await c.app.inject({
+    method: "GET",
+    url: `/api/tasks?mandate=${"c".repeat(64)}`,
+  });
+  expect([200, 400]).toContain(unknown.statusCode);
+  expect(unknown.json()).toEqual({ tasks: [] });
+  expect(count(c, "offers")).toBeGreaterThan(0); // nothing was dropped
+  const m = await c.app.inject({ method: "GET", url: "/api/mandates?mandate='%3B--" });
+  expect(m.statusCode).toBe(200);
+  const forbidden = /preimage|sealed|seed|mnemonic|private/i;
+  const bodies = [
+    m.body,
+    (await c.app.inject({ method: "GET", url: "/api/mandates" })).body,
+    (await c.app.inject({ method: "GET", url: "/api/tasks" })).body,
+    (await c.app.inject({ method: "GET", url: `/api/tasks?mandate=${c.hashA}` })).body,
+    (await c.app.inject({ method: "GET", url: `/api/tasks?mandate=${c.hashB}` })).body,
+  ];
+  for (const b of bodies) expect(b).not.toMatch(forbidden);
+  await c.app.close();
+});
