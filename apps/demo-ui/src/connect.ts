@@ -1,5 +1,6 @@
 import { parseMineEvent } from "./lib/mine.js";
 import { parseUiEvent } from "./lib/parse.js";
+import { parseRetiredEvent } from "./lib/retired.js";
 import { type Service, useStore } from "./store.js";
 
 /** Engine WS: /v0/events. Host/port from ?engine=host:port, VITE_ENGINE_HOST/VITE_ENGINE_PORT, else page host. */
@@ -26,6 +27,8 @@ export function connectEngine(): () => void {
     ws.onmessage = (m) => {
       const mined = parseMineEvent(m.data);
       if (mined) return useStore.getState().setMine(mined);
+      const retired = parseRetiredEvent(m.data);
+      if (retired) return useStore.getState().retire(retired);
       const r = parseUiEvent(m.data);
       if (r.ok) useStore.getState().apply(r.event);
       else useStore.getState().reject();

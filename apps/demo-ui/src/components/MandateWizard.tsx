@@ -141,6 +141,7 @@ function ReviewStep(props: {
   // Set when the signer itself found the mandate unusual (its answer is HTTP 428 with a single-use token).
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  const root = useStore((st) => st.root);
   const checkId = useId();
   const sign = useSignMandate();
   const duration = mandateDuration(m.expires_at);
@@ -183,6 +184,13 @@ function ReviewStep(props: {
             ))}
           </ul>
         </Note>
+      )}
+      {root && (
+        <p className="border-l-2 border-ink pl-4 text-base">
+          {Date.parse(root.expires_at) > Date.now()
+            ? "Replaces the current mandate. Unused budget returns to you; a task already in flight finishes under its own permission."
+            : "The previous mandate expired."}
+        </p>
       )}
       <dl className="grid grid-cols-2 border-y border-rule [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
         <Fact
@@ -254,6 +262,9 @@ function ReviewStep(props: {
                 {error.message}
                 {error.confirmToken ? "" : " Nothing was signed. No funds moved."}
               </p>
+              {!error.confirmToken && (
+                <p className="font-mono text-sm text-subtle">Code {error.code}</p>
+              )}
             </Note>
           ))}
       </div>

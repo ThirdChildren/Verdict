@@ -16,25 +16,35 @@ export function TopBar(props: {
   onHelp: () => void;
   onReconnect: () => void;
   onMandate: () => void;
+  onNewMandate: () => void;
   onToggleInspector: () => void;
   onAgents: () => void;
 }) {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
   return (
-    <header className="flex flex-nowrap items-center gap-x-5 border-b-2 border-ink bg-paper px-6 py-3 [.presenter_&]:gap-x-3">
+    <header className="flex flex-nowrap items-center gap-x-4 min-[1440px]:gap-x-5 border-b-2 border-ink bg-paper px-6 py-3 [.presenter_&]:gap-x-3">
       <div className="flex shrink-0 items-baseline gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Verdict</h1>
-        <span className="font-mono text-sm whitespace-nowrap text-subtle [.presenter_&]:hidden">
+        <span className="hidden font-mono text-sm whitespace-nowrap text-subtle min-[1440px]:inline [.presenter_&]:hidden">
           regtest · tUSD
         </span>
       </div>
       <BudgetMeter state={props.state} />
       <MandatePill root={props.root} onClick={props.onMandate} />
+      {props.root && (
+        <WordButton
+          className="text-xs tracking-wide uppercase"
+          onClick={props.onNewMandate}
+          title="Sign a new mandate; it replaces the current one"
+        >
+          New mandate
+        </WordButton>
+      )}
       <ServicesPill state={props.state} onReconnect={props.onReconnect} />
       <nav
         aria-label="View"
-        className="ml-auto flex shrink-0 items-center gap-3 text-xs tracking-wide"
+        className="ml-auto flex shrink-0 items-center gap-2.5 text-xs tracking-wide min-[1440px]:gap-3"
       >
         <WordButton
           className="text-xs tracking-wide"

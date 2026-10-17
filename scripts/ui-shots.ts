@@ -77,6 +77,28 @@ const EXTRAS: Extra[] = [
       await p.keyboard.press("d");
     },
   },
+  {
+    id: "second-mandate-wizard",
+    scene: "second-mandate",
+    act: async (p) => {
+      await p.getByRole("button", { name: /new mandate/i }).click();
+      await p.getByRole("textbox").fill(EXAMPLE);
+      await p.getByRole("button", { name: /draft mandate/i }).click();
+      await p.getByRole("button", { name: /approve and sign/i }).waitFor();
+    },
+  },
+  {
+    id: "second-mandate-done",
+    scene: "second-mandate",
+    act: async (p) => {
+      await p.getByRole("button", { name: /new mandate/i }).click();
+      await p.getByRole("textbox").fill(EXAMPLE);
+      await p.getByRole("button", { name: /draft mandate/i }).click();
+      await p.getByRole("button", { name: /approve and sign/i }).click();
+      await p.getByText(/signed by the principal/i).waitFor();
+      await p.getByRole("button", { name: /start working/i }).click();
+    },
+  },
   { id: "wizard-signed", scene: "empty", act: (p) => wizard(p, EXAMPLE, 2) },
 ];
 

@@ -10,6 +10,7 @@ import type {
 import { create } from "zustand";
 import type { MineProgress } from "./lib/mine.js";
 import { precisionOf } from "./lib/money.js";
+import type { MandateRetired } from "./lib/retired.js";
 import { flowFor, stepForState } from "./lib/steps.js";
 import { workerStoppedHint } from "./lib/stopped.js";
 
@@ -56,6 +57,11 @@ export interface BudgetView {
   reserved: string;
   committed: string;
 }
+/** A mandate replaced by a new one (engine MANDATE_RETIRED). Tasks started up to `afterSeq` ran under it. */
+export interface Retirement extends MandateRetired {
+  afterSeq: number;
+  receivedAt: string;
+}
 export interface AppState {
   /** Budget of the ROOT mandate: covers all tasks. */
   budget: BudgetView | null;
@@ -84,6 +90,8 @@ export interface AppState {
   selected: string | null;
   /** Live "Mine until refund" progress by task id (engine DEMO_MINE_PROGRESS). */
   mine: Record<string, MineProgress>;
+  /** Retired mandates, newest first (engine MANDATE_RETIRED, outside the protocol event stream). */
+  retirements: Retirement[];
 }
 
 export const initialState: AppState = {
@@ -107,6 +115,7 @@ export const initialState: AppState = {
   events: [],
   selected: null,
   mine: {},
+  retirements: [],
 };
 
 function blank(s: AppState, prev: TaskView | undefined, seq = 0): TaskView {
@@ -150,7 +159,13 @@ export function reduce(s: AppState, e: UiEvent): AppState {
   };
   switch (e.type) {
     case "CAP_ROOT":
-      return { ...next, root: e.data, precision: precisionOf(e.data.max_total) };
+      // A different root is a new mandate: its numbers arrive with its own BUDGET_UPDATED, never the old ones.
+      return {
+        ...next,
+        root: e.data,
+        precision: precisionOf(e.data.max_total),
+        budget: s.root && s.root.cap_id !== e.data.cap_id ? null : s.budget,
+      };
     case "CAP_CHILD":
       return { ...next, child: e.data };
     case "BLOCKED": {
@@ -264,6 +279,7 @@ interface Actions {
   setPayeeNames: (names: Record<string, string>) => void;
   select: (key: string) => void;
   setMine: (p: MineProgress) => void;
+  retire: (r: MandateRetired) => void;
   reset: () => void;
 }
 export const useStore = create<AppState & Actions>((set) => ({
@@ -274,5 +290,12 @@ export const useStore = create<AppState & Actions>((set) => ({
   setPayeeNames: (names) => set({ payeeNames: names }),
   select: (key) => set({ selected: key }),
   setMine: (p) => set((s) => ({ mine: { ...s.mine, [p.task_id]: p } })),
+  retire: (r) =>
+    set((s) => ({
+      retirements: [
+        { ...r, afterSeq: s.lastSeq, receivedAt: r.at ?? new Date().toISOString() },
+        ...s.retirements,
+      ],
+    })),
   reset: () => set({ ...initialState }),
 }));

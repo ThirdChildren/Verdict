@@ -45,6 +45,26 @@ describe("App in mock mode", () => {
     ).toBeGreaterThan(0);
     expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
   });
+  it("mock new mandate: the word opens the wizard and the canned signing shows the new ceiling", async () => {
+    render(
+      <Root>
+        <App />
+      </Root>,
+    );
+    expect(screen.queryByRole("button", { name: /new mandate/i })).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Storyboard"), "second-mandate");
+    await userEvent.click(await screen.findByRole("button", { name: /new mandate/i }));
+    await userEvent.type(
+      screen.getByRole("textbox"),
+      "Pay up to 7 tUSD to worker to convert CSV, within 12 hours",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /draft mandate/i }));
+    expect(await screen.findByText(/^Replaces the current mandate\./)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /approve and sign/i }));
+    expect(await screen.findByText(/signed by the principal/i)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /start working/i }));
+    expect((await screen.findAllByText(/mandate retired/i)).length).toBeGreaterThan(0);
+  });
   it("toggles dark mode on <html> so portalled dialogs follow it", async () => {
     render(
       <Root>

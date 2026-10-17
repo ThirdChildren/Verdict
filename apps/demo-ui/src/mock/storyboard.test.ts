@@ -23,6 +23,7 @@ describe("mock storyboard", () => {
       "expired",
       "ring",
       "blocked",
+      "second-mandate",
     ]);
   });
   it("each scene reduces to the intended chip and step", () => {

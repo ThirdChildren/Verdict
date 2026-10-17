@@ -35,7 +35,8 @@ export function MandatePill(props: { root: RootCapability | null; onClick: () =>
       className={st === "active" ? "" : "font-semibold decoration-2 decoration-ink"}
     >
       <span aria-hidden>{st === "active" ? "■" : "▲"} </span>
-      {text}
+      <span className="hidden min-[1440px]:inline">{text}</span>
+      <span className="min-[1440px]:hidden">{text.replace(/(\d+h) (\d+m)/, "$1$2")}</span>
     </WordButton>
   );
 }

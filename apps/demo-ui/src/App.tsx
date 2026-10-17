@@ -126,6 +126,10 @@ export function App() {
         onHelp={() => setHelpOpen(true)}
         onReconnect={reconnect}
         onMandate={() => (state.root ? setMandateOpen(true) : setWizardOpen(true))}
+        onNewMandate={() => {
+          setMandateOpen(false);
+          setWizardOpen(true);
+        }}
         onToggleInspector={() => setInspector((v) => !v)}
         onAgents={() => setAgentsOpen(true)}
       />

@@ -63,7 +63,9 @@ export function BudgetMeter({ state }: { state: AppState }) {
               </Tooltip>
             </span>
           ))}
-          <span className="text-xs text-subtle">/ {state.root.max_total} tUSD</span>
+          <span className="hidden text-xs text-subtle min-[1360px]:inline">
+            / {state.root.max_total} tUSD
+          </span>
         </p>
       </TooltipProvider>
       <div

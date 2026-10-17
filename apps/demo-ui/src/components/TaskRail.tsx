@@ -23,6 +23,7 @@ function Row({ row, selected }: { row: RailRow; selected: boolean }) {
         </span>
         <span className="col-span-2 col-start-2 text-left">
           <StatusChip chip={row.chip} />
+          {row.retired && <span className="ml-3 text-sm text-subtle">mandate retired</span>}
         </span>
       </button>
     </li>

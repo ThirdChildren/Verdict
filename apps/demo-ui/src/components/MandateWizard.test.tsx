@@ -2,7 +2,10 @@
 
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { RootCapability } from "@verdict/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MOCK_EVENTS } from "../mock/events.js";
+import { initialState, useStore } from "../store.js";
 import { renderWithProviders } from "../test-utils.js";
 import { EXAMPLES, MandateWizard } from "./MandateWizard.js";
 
@@ -60,6 +63,7 @@ async function draft(text: string) {
 beforeEach(() => history.pushState({}, "", "/"));
 afterEach(() => {
   cleanup();
+  useStore.setState({ ...initialState });
   vi.unstubAllGlobals();
 });
 
@@ -119,5 +123,49 @@ describe("MandateWizard", () => {
     await waitFor(() => expect(screen.getByText(/signed by the principal/i)).toBeTruthy());
     const sign = calls.filter((c) => c.url.includes("/sign-root"));
     expect(sign[1]?.body.confirm_token).toBe("tok1");
+  });
+});
+
+describe("MandateWizard replacing a mandate", () => {
+  const root = MOCK_EVENTS.find((e) => e.type === "CAP_ROOT")?.data as RootCapability;
+  it("says the current mandate is replaced when a root is active", async () => {
+    useStore.setState({ root: { ...root, expires_at: iso(5) } });
+    stubFetch(proposal(12, false), signed);
+    await draft("Pay up to 5 tUSD to worker, within 12 hours");
+    expect(
+      await screen.findByText(/^Replaces the current mandate\. Unused budget returns/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/previous mandate expired/)).toBeNull();
+  });
+  it("says the previous mandate expired when the root has expired", async () => {
+    useStore.setState({ root: { ...root, expires_at: iso(-2) } });
+    stubFetch(proposal(12, false), signed);
+    await draft("Pay up to 5 tUSD to worker, within 12 hours");
+    expect(await screen.findByText("The previous mandate expired.")).toBeTruthy();
+    expect(screen.queryByText(/Replaces the current mandate/)).toBeNull();
+  });
+  it("shows no such line for the first mandate", async () => {
+    stubFetch(proposal(12, false), signed);
+    await draft("Pay up to 5 tUSD to worker, within 12 hours");
+    await screen.findByText("5.00 tUSD");
+    expect(screen.queryByText(/Replaces the current mandate/)).toBeNull();
+  });
+  it("renders an engine refusal in place with its message and code", async () => {
+    useStore.setState({ root: { ...root, expires_at: iso(5) } });
+    stubFetch(proposal(12, false), signed);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url.includes("/api/goal")) return json(proposal(12, false));
+        if (url.includes("/sign-root")) return signed();
+        return json({ ok: false, code: "ROOT_EXISTS", message: "A mandate already exists." }, 409);
+      }),
+    );
+    await draft("Pay up to 5 tUSD to worker, within 12 hours");
+    await userEvent.click(await screen.findByRole("button", { name: /approve and sign/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/A mandate already exists\./);
+    expect(alert.textContent).toMatch(/ROOT_EXISTS/);
+    expect(screen.getByRole("button", { name: /approve and sign/i })).toBeTruthy();
   });
 });

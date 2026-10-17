@@ -1,5 +1,5 @@
 // MOCK DATA: stand-ins for the engine REST endpoints, used only with ?mock=1 (banner is visible).
-import { contractHash, dirHash, type VerdictRecord } from "@verdict/protocol";
+import { contractHash, dirHash, uiEventSchema, type VerdictRecord } from "@verdict/protocol";
 import {
   ApiError,
   type Chain,
@@ -133,6 +133,7 @@ export async function signAndInstall(
       "This mandate looks unusual: an amount in it does not appear in what you wrote. Please confirm a second time before it is signed.",
       "mock-token",
     );
+  installMockRoot();
   return { capHash: "cap_mock0123456789ab".padEnd(64, "0"), signature: "5".repeat(128) };
 }
 
@@ -152,4 +153,41 @@ export async function mineUntilRefund(taskId: string): Promise<void> {
     if (h < to) setTimeout(tick, 400);
   };
   tick();
+}
+
+/** MOCK DATA: a second mandate replaces the first on the screen only. Nothing is signed or sent anywhere. */
+function installMockRoot(): void {
+  const st = useStore.getState();
+  const old = st.root;
+  if (!old) return;
+  const id = "cap_2222222222222222";
+  const at = new Date().toISOString();
+  st.retire({
+    cap_hash: id,
+    retired: [old.cap_id],
+    reason: "The previous mandate was retired. Nothing was paid.",
+    at,
+  });
+  const base = st.lastSeq;
+  st.apply(
+    uiEventSchema.parse({
+      seq: base + 1,
+      at,
+      type: "CAP_ROOT",
+      data: {
+        ...old,
+        cap_id: id,
+        max_total: "5.00",
+        expires_at: new Date(Date.now() + 12 * 3_600_000).toISOString(),
+      },
+    }),
+  );
+  st.apply(
+    uiEventSchema.parse({
+      seq: base + 2,
+      at,
+      type: "BUDGET_UPDATED",
+      data: { cap_id: id, remaining: "5.00", reserved: "0.00", committed: "0.00" },
+    }),
+  );
 }

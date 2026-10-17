@@ -46,6 +46,8 @@ export interface RailRow {
   label: string;
   amount: string | null;
   chip: Chip;
+  /** The task started under a mandate that has since been replaced. Its state is unchanged. */
+  retired: boolean;
 }
 
 const intentShape = z
@@ -75,6 +77,7 @@ export function railRows(
   stopped: ReadonlySet<string> = new Set(),
 ): RailRow[] {
   const rows: Omit<RailRow, "n">[] = [];
+  const retiredSeq = Math.max(-1, ...(s.retirements ?? []).map((r) => r.afterSeq));
   for (const [id, t] of Object.entries(s.tasks)) {
     // A task whose only story is a BLOCK is shown by its block row.
     if (t.state === "BLOCKED") continue;
@@ -85,6 +88,7 @@ export function railRows(
       label: taskLabel(id, descriptions),
       amount: t.amount,
       chip: stopped.has(id) ? "Refund pending" : chipFor(t.state),
+      retired: t.seq <= retiredSeq,
     });
   }
   for (const b of s.blocks) {
@@ -95,6 +99,7 @@ export function railRows(
       label: BLOCK_TITLES[b.code as BlockCode],
       amount: intentSummary(b.intent).amount ?? null,
       chip: "Blocked",
+      retired: false,
     });
   }
   rows.sort((a, b) => a.seq - b.seq);

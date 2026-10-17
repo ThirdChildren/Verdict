@@ -1,7 +1,9 @@
 import type { UiEvent } from "@verdict/protocol";
 import { describe, expect, it } from "vitest";
+import { parseRetiredEvent } from "./lib/retired.js";
+import { railRows } from "./lib/view.js";
 import { MOCK_EVENTS } from "./mock/events.js";
-import { type AppState, initialState, reduce } from "./store.js";
+import { type AppState, initialState, reduce, useStore } from "./store.js";
 
 const run = (n: number): AppState => MOCK_EVENTS.slice(0, n).reduce(reduce, initialState);
 const idx = (pred: (i: number) => boolean) => MOCK_EVENTS.findIndex((_e, i) => pred(i)) + 1;
@@ -93,5 +95,56 @@ describe("store reducer", () => {
       { status: "Pending", at: "2026-10-18T14:45:00Z" },
       { status: "Failed", at: "2026-10-18T14:45:02Z" },
     ]);
+  });
+});
+
+describe("MANDATE_RETIRED", () => {
+  const frame = {
+    type: "MANDATE_RETIRED",
+    cap_hash: "cap_2222222222222222",
+    retired: ["cap_0123456789abcdef"],
+    reason: "The previous mandate was retired.",
+  };
+  it("parses the UI-only shape and the earlier draft shape, nothing else", () => {
+    expect(parseRetiredEvent(JSON.stringify(frame))).toMatchObject({ retired: frame.retired });
+    expect(
+      parseRetiredEvent({ type: "MANDATE_RETIRED", cap_id: "a", replaced_by: "b", message: "m" }),
+    ).toMatchObject({ cap_hash: "b", retired: ["a"], reason: "m" });
+    expect(parseRetiredEvent({ type: "MANDATE_RETIRED" })).toBeNull();
+    expect(parseRetiredEvent("not json")).toBeNull();
+  });
+  it("marks earlier tasks retired, keeps their state, and switches the budget to the new root", () => {
+    useStore.getState().reset();
+    const st = useStore.getState();
+    for (const e of MOCK_EVENTS.slice(0, MOCK_EVENTS.length - 1)) st.apply(e);
+    const before = railRows(useStore.getState());
+    expect(before.every((r) => !r.retired)).toBe(true);
+    const root = useStore.getState().root;
+    if (!root) throw new Error("no root");
+    const last = useStore.getState().lastSeq;
+    st.retire({ ...frame, retired: [root.cap_id] });
+    st.apply({
+      ...(MOCK_EVENTS[0] as UiEvent),
+      seq: last + 1,
+      data: { ...root, cap_id: frame.cap_hash },
+    } as UiEvent);
+    const mid = useStore.getState();
+    expect(mid.budget).toBeNull();
+    st.apply({
+      seq: last + 2,
+      at: "2026-10-18T16:00:00Z",
+      type: "BUDGET_UPDATED",
+      data: { cap_id: frame.cap_hash, remaining: "5.00", reserved: "0.00", committed: "0.00" },
+    });
+    const after = useStore.getState();
+    expect(after.retirements[0]?.retired).toEqual([root.cap_id]);
+    expect(after.budget?.remaining).toBe("5.00");
+    const rows = railRows(after).filter((r) => r.kind === "task");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.retired)).toBe(true);
+    expect(rows.map((r) => r.chip)).toEqual(
+      before.filter((r) => r.kind === "task").map((r) => r.chip),
+    );
+    useStore.getState().reset();
   });
 });
