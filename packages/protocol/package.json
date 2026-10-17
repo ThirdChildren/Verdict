@@ -1,0 +1,25 @@
+{
+  "name": "@verdict/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./node": {
+      "types": "./src/node.ts",
+      "default": "./src/node.ts"
+    }
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "canonicalize": "5.1.0",
+    "libsodium-wrappers": "0.8.4",
+    "zod": "4.6.5"
+  },
+  "scripts": {
+    "test": "vitest run --reporter=dot --root ../.. --config vitest.config.ts packages/protocol/src"
+  }
+}
