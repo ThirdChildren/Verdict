@@ -7,10 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ApiError, type GoalResponse, type SignedMandate } from "../lib/api.js";
+import { parseCeiling, withCeiling } from "../lib/ceiling.js";
 import { MIN_MANDATE_MINUTES, mandateDuration } from "../lib/mandateRules.js";
-import { useProposeMandate, useSignMandate } from "../lib/queries.js";
+import { precisionOf } from "../lib/money.js";
+import { useFunds, useProposeMandate, useSignMandate } from "../lib/queries.js";
 import { useStore } from "../store.js";
 import { BlockCard } from "./BlockCard.js";
+import { CeilingField } from "./CeilingField.js";
 import { Hash } from "./Hash.js";
 import { Note } from "./Note.js";
 
@@ -136,7 +139,17 @@ function ReviewStep(props: {
   onSigned: (s: SignedMandate) => void;
 }) {
   const { proposal } = props;
-  const m = proposal.mandate;
+  const precision = precisionOf(proposal.mandate.max_total);
+  const [ceiling, setCeiling] = useState(proposal.mandate.max_total);
+  const ceilingMinor = parseCeiling(ceiling, precision);
+  // The mandate that is shown and signed: the drafted one with the ceiling chosen here.
+  const m = {
+    ...(ceilingMinor === null
+      ? proposal.mandate
+      : withCeiling(proposal.mandate, ceilingMinor, precision)),
+  };
+  const connected = useStore((st) => st.principal.status === "connected");
+  const funds = useFunds(connected);
   const [second, setSecond] = useState(false);
   // Set when the signer itself found the mandate unusual (its answer is HTTP 428 with a single-use token).
   const [token, setToken] = useState<string | null>(null);
@@ -146,7 +159,8 @@ function ReviewStep(props: {
   const sign = useSignMandate();
   const duration = mandateDuration(m.expires_at);
   const askSecond = proposal.needs_second_confirm || token !== null;
-  const canApprove = !sign.isPending && duration.ok && (!askSecond || second);
+  const canApprove =
+    !sign.isPending && duration.ok && ceilingMinor !== null && (!askSecond || second);
   const payees = payeesOf(m);
   const categories = m.allowed_categories ?? [];
 
@@ -192,6 +206,13 @@ function ReviewStep(props: {
             : "The previous mandate expired."}
         </p>
       )}
+      <CeilingField
+        value={ceiling}
+        onChange={setCeiling}
+        precision={precision}
+        perTask={proposal.mandate.max_per_task}
+        available={connected ? (funds.data?.available_to_delegate ?? null) : null}
+      />
       <dl className="grid grid-cols-2 border-y border-rule [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
         <Fact
           label="Spending ceiling"
@@ -284,7 +305,7 @@ function SignedStep(props: { signed: SignedMandate; onClose: () => void }) {
   return (
     <div className="grid w-full gap-6" aria-live="polite">
       <p className="border-y-2 border-ink py-2 text-2xl font-semibold">
-        Signed by the principal (separate process)
+        Signed by your principal key (WDK, separate process)
       </p>
       <p className="text-xl">
         The signing key lives in its own process on this machine. The agents and this screen never

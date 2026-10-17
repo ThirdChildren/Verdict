@@ -31,7 +31,7 @@ async function wizard(p: Page, text: string, stage: 1 | 2): Promise<void> {
   await p.getByRole("button", { name: /approve and sign/i }).waitFor();
   if (stage === 1) return;
   await p.getByRole("button", { name: /approve and sign/i }).click();
-  await p.getByText(/signed by the principal/i).waitFor();
+  await p.getByText(/signed by your principal key/i).waitFor();
 }
 // Extend here (e.g. the demo console) with another { id, scene, act }.
 const EXTRAS: Extra[] = [
@@ -95,7 +95,7 @@ const EXTRAS: Extra[] = [
       await p.getByRole("textbox").fill(EXAMPLE);
       await p.getByRole("button", { name: /draft mandate/i }).click();
       await p.getByRole("button", { name: /approve and sign/i }).click();
-      await p.getByText(/signed by the principal/i).waitFor();
+      await p.getByText(/signed by your principal key/i).waitFor();
       await p.getByRole("button", { name: /start working/i }).click();
     },
   },
