@@ -86,7 +86,7 @@ test("out-of-policy intent is refused with the shared REFUSAL shape", async () =
   const body = refusalResponseSchema.parse(r.json());
   expect(body.code).toBe("RECURRING_NOT_ALLOWED");
   expect(body.message).toContain("recurring");
-  expect(body.intent_sha256).toBe(hashObj(bad));
+  expect(body.intent_sha256).toBe(hashObj({ cap_hash: childHash, intent: bad }));
   await app.close();
 });
 
@@ -213,5 +213,21 @@ test("localOnly: engine refuses a foreign Host and a foreign browser Origin", as
   expect((await h({ host: "localhost:7401", origin: "http://attacker.example" })).statusCode).toBe(
     403,
   );
+  await app.close();
+});
+
+test("refusal and acceptance report the same intent hash form", async () => {
+  const { app, childHash, buyer, ledger } = await setup();
+  const ok = await post(app, await spendEnvelope(buyer, childHash));
+  expect(ok.statusCode).toBe(200);
+  const sha = hashObj({ cap_hash: childHash, intent });
+  expect(ledger.getAcceptedIntent(sha)?.capHash).toBe(childHash);
+  // A refusal of the identical intent under another permission is still keyed {cap_hash, intent}.
+  const bad = { ...intent, recurring: true, interval: "daily" };
+  const r = await post(app, await spendEnvelope(buyer, childHash, bad));
+  expect(refusalResponseSchema.parse(r.json()).intent_sha256).toBe(
+    hashObj({ cap_hash: childHash, intent: bad }),
+  );
+  expect(refusalResponseSchema.parse(r.json()).intent_sha256).not.toBe(hashObj(bad));
   await app.close();
 });

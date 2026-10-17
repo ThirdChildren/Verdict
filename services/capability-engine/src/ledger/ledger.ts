@@ -141,6 +141,9 @@ export class Ledger {
     const cols = db.prepare("PRAGMA table_info(capabilities)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "holder"))
       db.exec("ALTER TABLE capabilities ADD COLUMN holder TEXT");
+    // E21: when a capability was retired by a newer mandate (null = never retired by replacement). Safe on old databases.
+    if (!cols.some((c) => c.name === "revoked_at"))
+      db.exec("ALTER TABLE capabilities ADD COLUMN revoked_at TEXT");
     const rcols = db.prepare("PRAGMA table_info(reservations)").all() as { name: string }[];
     if (!rcols.some((c) => c.name === "intent_sha256")) {
       db.exec("ALTER TABLE reservations ADD COLUMN intent_sha256 TEXT");
@@ -210,6 +213,14 @@ export class Ledger {
         o.sealedPreimage,
         now.toISOString(),
       );
+  }
+
+  /** The accepted intent hash of a task (from its offer), or undefined. Never reads the preimage. */
+  intentShaForTask(taskId: string): string | undefined {
+    const r = this.db.prepare("SELECT intent_sha256 FROM offers WHERE task_id = ?").get(taskId) as
+      | { intent_sha256: string }
+      | undefined;
+    return r?.intent_sha256;
   }
 
   getOfferByIntent(sha: string): Omit<OfferRecord, "preimageHex"> | undefined {
@@ -387,13 +398,82 @@ export class Ledger {
       );
   }
 
-  revoke(hash: string): void {
-    this.db.prepare("UPDATE capabilities SET revoked = 1 WHERE hash = ?").run(hash);
+  revoke(hash: string, now?: Date): void {
+    this.db
+      .prepare(
+        "UPDATE capabilities SET revoked = 1, revoked_at = COALESCE(revoked_at, ?) WHERE hash = ?",
+      )
+      .run((now ?? new Date()).toISOString(), hash);
+  }
+
+  /** Runs `fn` in one immediate SQLite transaction (nested calls join it). Any throw rolls everything back. */
+  inTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn).immediate();
+  }
+
+  /**
+   * E21: the newest mandate replaces every other live root. Retires each other root and each of its children
+   * that has no reservation in `reserved` state; children with one in flight stay valid until their payment
+   * settles (see applyPaymentStatus). Never inserts, deletes or moves a reservation. One transaction.
+   * Returns the retired capability ids (root first, then its children) and the number of children kept.
+   */
+  retireOtherRoots(keepRoot: string, now: Date): { retired: string[]; inFlight: number } {
+    return this.inTransaction(() => {
+      const roots = this.db
+        .prepare(
+          "SELECT hash, cap_id FROM capabilities WHERE parent_hash IS NULL AND revoked = 0 AND hash != ? ORDER BY rowid",
+        )
+        .all(keepRoot) as { hash: string; cap_id: string }[];
+      const retired: string[] = [];
+      let inFlight = 0;
+      for (const root of roots) {
+        this.revoke(root.hash, now);
+        retired.push(root.cap_id);
+        const kids = this.db
+          .prepare(
+            "SELECT hash, cap_id FROM capabilities WHERE root_hash = ? AND parent_hash IS NOT NULL AND revoked = 0 ORDER BY rowid",
+          )
+          .all(root.hash) as { hash: string; cap_id: string }[];
+        for (const kid of kids) {
+          if (this.hasReservedReservation(kid.hash)) {
+            inFlight += 1;
+            continue;
+          }
+          this.revoke(kid.hash, now);
+          retired.push(kid.cap_id);
+        }
+      }
+      return { retired, inFlight };
+    });
+  }
+
+  private hasReservedReservation(capHash: string): boolean {
+    return (
+      this.db
+        .prepare("SELECT 1 FROM reservations WHERE cap_hash = ? AND state = 'reserved' LIMIT 1")
+        .get(capHash) !== undefined
+    );
+  }
+
+  /** Revokes a child whose root was retired once nothing of it is in flight any more. */
+  private closeRetiredChild(capHash: string, now: Date): void {
+    const cap = this.getCap(capHash);
+    if (!cap || cap.parent_hash === null || cap.revoked === 1) return;
+    if (!this.isRevoked(cap.root_hash) || this.hasReservedReservation(capHash)) return;
+    this.revoke(capHash, now);
+  }
+
+  /** The capability's own revoked flag only (a child of a retired root can still be unflagged while in flight). */
+  hasOwnRevokedFlag(hash: string): boolean {
+    return this.getCap(hash)?.revoked === 1;
   }
 
   isRevoked(hash: string): boolean {
+    // Revoked when its own flag OR its root's is set (a child kept alive for an in-flight payment may not start another).
     const r = this.getCap(hash);
-    return r === undefined ? true : r.revoked === 1;
+    if (r === undefined || r.revoked === 1) return true;
+    const root = r.root_hash === hash ? r : this.getCap(r.root_hash);
+    return root === undefined || root.revoked === 1;
   }
 
   /** The stored capability JSON for a hash, or undefined. Caller must re-validate with Zod. */
@@ -425,7 +505,7 @@ export class Ledger {
   latestChild(): string | undefined {
     const r = this.db
       .prepare(
-        "SELECT hash FROM capabilities WHERE parent_hash IS NOT NULL AND holder IS NOT NULL ORDER BY rowid DESC LIMIT 1",
+        "SELECT hash FROM capabilities WHERE parent_hash IS NOT NULL AND holder IS NOT NULL AND revoked = 0 ORDER BY rowid DESC LIMIT 1",
       )
       .get() as { hash: string } | undefined;
     return r?.hash;
@@ -435,10 +515,19 @@ export class Ledger {
   latestRoot(): string | undefined {
     const r = this.db
       .prepare(
-        "SELECT hash FROM capabilities WHERE parent_hash IS NULL ORDER BY rowid DESC LIMIT 1",
+        "SELECT hash FROM capabilities WHERE parent_hash IS NULL AND revoked = 0 ORDER BY rowid DESC LIMIT 1",
       )
       .get() as { hash: string } | undefined;
     return r?.hash;
+  }
+
+  /** True when some root exists but every root has been retired. */
+  hasRetiredRoot(): boolean {
+    return (
+      this.db
+        .prepare("SELECT 1 FROM capabilities WHERE parent_hash IS NULL AND revoked = 1 LIMIT 1")
+        .get() !== undefined
+    );
   }
 
   /** The HTLC lock length in blocks the invoice asked for (min_final_cltv_expiry_delta). Idempotent. */
@@ -544,7 +633,7 @@ export class Ledger {
       // Same hash under another intent falls through to the UNIQUE(payment_hash) constraint and throws.
       const cap = this.getCap(req.capHash);
       if (!cap) throw new BlockError("PARENT_MISMATCH", renderBlockMessage("PARENT_MISMATCH"));
-      if (cap.revoked === 1)
+      if (this.isRevoked(req.capHash))
         throw new BlockError("CAPABILITY_REVOKED", renderBlockMessage("CAPABILITY_REVOKED"));
       if (req.amount <= 0n)
         throw new BlockError(
@@ -657,7 +746,12 @@ export class Ledger {
     if (!cur) return undefined;
     const target: ReservationState | null =
       status === "Settled" ? "committed" : status === "Failed" ? "released" : null;
-    if (target === null || cur.state === target) return cur;
-    return this.transition(cur.id, target, now);
+    if (target === null) return cur;
+    // One transaction: the move and the revocation of a retired child (E21) succeed or fail together.
+    return this.inTransaction(() => {
+      const res = cur.state === target ? cur : this.transition(cur.id, target, now);
+      this.closeRetiredChild(cur.capHash, now);
+      return res;
+    });
   }
 }

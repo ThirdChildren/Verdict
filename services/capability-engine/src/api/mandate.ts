@@ -222,12 +222,51 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       if (!dec.ok) return fail(422, dec);
 
       const childHash = capabilityHash(child);
-      d.ledger.registerCapability(root, rootHash);
-      d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer);
-      d.bus.publish({ type: "CAP_ROOT", data: root }, now);
-      d.bus.publish({ type: "CAP_CHILD", data: child }, now);
-      announceBudget(rootHash, childHash, now);
-      return { ok: true, root_cap_id: root.cap_id, cap_hash: childHash };
+      // One transaction (invariant 3): the new root, its child and the retirement of every older root.
+      // A root already known (same hash re-posted) retires nothing.
+      const { retired, inFlight } = d.ledger.inTransaction(() => {
+        d.ledger.registerCapability(root, rootHash);
+        d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer);
+        return rootKnown
+          ? { retired: [] as string[], inFlight: 0 }
+          : d.ledger.retireOtherRoots(rootHash, now);
+      });
+      // Committed. Announcing is best effort: a failure here is logged and never turns the answer into a refusal.
+      const say = (fn: () => void): void => {
+        try {
+          fn();
+        } catch (err) {
+          app.log.warn(
+            { err: err instanceof Error ? err.message : "unknown" },
+            "mandate announce failed",
+          );
+        }
+      };
+      if (retired.length > 0)
+        say(() =>
+          d.bus.publish(
+            {
+              type: "MANDATE_RETIRED",
+              cap_hash: rootHash,
+              retired,
+              reason:
+                inFlight > 0
+                  ? `The previous mandate was retired. ${inFlight} task(s) still running keep their permission until they settle. Nothing was paid.`
+                  : "The previous mandate was retired. No task was running. Nothing was paid.",
+            },
+            now,
+          ),
+        );
+      say(() => d.bus.publish({ type: "CAP_ROOT", data: root }, now));
+      say(() => d.bus.publish({ type: "CAP_CHILD", data: child }, now));
+      say(() => announceBudget(rootHash, childHash, now));
+      return {
+        ok: true,
+        root_cap_id: root.cap_id,
+        cap_hash: childHash,
+        retired,
+        in_flight: inFlight,
+      };
     } catch {
       // Fail closed: nothing is registered unless every step above completed.
       return fail(500, block("MALFORMED_INTENT", { reason: "the mandate could not be processed" }));
@@ -247,7 +286,19 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       return refuse(b, body ?? null);
     };
     try {
-      const rootHash = d.ledger.latestRoot();
+      const requested =
+        typeof body === "object" && body !== null
+          ? (body as Record<string, unknown>).root_hash
+          : undefined;
+      // A caller may name the mandate it means; a retired one is refused, never silently swapped for the live one.
+      if (
+        typeof requested === "string" &&
+        d.ledger.getCapability(requested) !== undefined &&
+        d.ledger.isRevoked(requested)
+      )
+        return fail(422, block("CAPABILITY_REVOKED"));
+      const rootHash = typeof requested === "string" ? requested : d.ledger.latestRoot();
+      if (!rootHash && d.ledger.hasRetiredRoot()) return fail(422, block("CAPABILITY_REVOKED"));
       const parsed = rootCapabilitySchema.safeParse(
         rootHash ? d.ledger.getCapability(rootHash) : undefined,
       );

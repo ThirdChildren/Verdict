@@ -148,7 +148,12 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     ),
   );
 
-  const refuse = (d: Block, capId: string | null, intent: unknown): RefusalResponse => {
+  const refuse = (
+    d: Block,
+    capId: string | null,
+    intent: unknown,
+    intentSha?: string,
+  ): RefusalResponse => {
     bus.publish(
       { type: "BLOCKED", data: { code: d.code, message: d.message, intent, cap_id: capId } },
       now(),
@@ -157,7 +162,8 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       ok: false,
       code: d.code,
       message: d.message,
-      intent_sha256: hashObj(intent ?? null),
+      // The stored form hashObj({cap_hash, intent}) when known, so refusal and acceptance of one intent share a hash.
+      intent_sha256: intentSha ?? hashObj(intent ?? null),
     };
   };
 
@@ -250,12 +256,12 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       const parsed = childCapabilitySchema.safeParse(raw);
       if (!ledger || !parsed.success) {
         reply.code(422);
-        return refuse(block("PARENT_MISMATCH"), null, intent);
+        return refuse(block("PARENT_MISMATCH"), null, intent, intentSha);
       }
       const cap = parsed.data;
       if (capabilityHash(cap) !== cap_hash) {
         reply.code(422);
-        return refuse(block("PARENT_MISMATCH"), cap.cap_id, intent);
+        return refuse(block("PARENT_MISMATCH"), cap.cap_id, intent, intentSha);
       }
       // The signer must be the bound holder of this child capability, before any policy runs.
       const holder = ledger.holderOf(cap_hash);
@@ -267,6 +273,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
           }),
           cap.cap_id,
           intent,
+          intentSha,
         );
       }
       // Every ancestor's signed payee list applies, whoever sent the intent.
@@ -279,7 +286,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
         });
       } catch {
         reply.code(422);
-        return refuse(block("PARENT_MISMATCH"), cap.cap_id, intent);
+        return refuse(block("PARENT_MISMATCH"), cap.cap_id, intent, intentSha);
       }
       const d = checkIntent(cap, intent, {
         ancestorPayees,
@@ -292,7 +299,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       });
       if (!d.ok) {
         reply.code(422);
-        return remember(422, refuse(d, cap.cap_id, intent));
+        return remember(422, refuse(d, cap.cap_id, intent, intentSha));
       }
       ledger.recordAcceptedIntent(intentSha, cap_hash, intent, e.from, now());
       if (offers)
@@ -301,7 +308,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
           offers
             .offerFor(intentSha)
             .then((r) => {
-              if (!r.ok) refuse(r, cap.cap_id, intent);
+              if (!r.ok) refuse(r, cap.cap_id, intent, intentSha);
             })
             .catch((err: unknown) =>
               refuse(
@@ -310,6 +317,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
                 }),
                 cap.cap_id,
                 intent,
+                intentSha,
               ),
             );
         });

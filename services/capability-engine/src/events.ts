@@ -10,7 +10,19 @@ export interface WorkerStatusEvent {
   data: { task_id: string; worker_status: "stopped"; silent_seconds: number; message: string };
 }
 
-export type EngineEvent = UiEvent | DemoMineProgressEvent | WorkerStatusEvent;
+/** Not part of the frozen protocol: a newer mandate replaced the older ones (sent before the new CAP_ROOT). */
+export interface MandateRetiredEvent {
+  seq: number;
+  at: string;
+  type: "MANDATE_RETIRED";
+  /** Hash of the new root. */
+  cap_hash: string;
+  /** cap_id of each retired root, followed by the cap_ids of its retired children. */
+  retired: string[];
+  reason: string;
+}
+
+export type EngineEvent = UiEvent | DemoMineProgressEvent | WorkerStatusEvent | MandateRetiredEvent;
 type Listener = (e: EngineEvent) => void;
 type Distribute<T> = T extends { seq: number } ? Omit<T, "seq" | "at"> : never;
 

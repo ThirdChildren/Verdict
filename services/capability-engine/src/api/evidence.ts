@@ -51,8 +51,13 @@ export function registerEvidenceRoutes(app: FastifyInstance, d: EvidenceDeps): v
       .verdictsFor(stored.paymentHash)
       .map((v) => verdictRecordSchema.safeParse(v))
       .flatMap((p) => (p.success ? [p.data] : []));
+    // The accepted spend intent of this task (never the preimage); null when unknown.
+    const intentSha = d.ledger.intentShaForTask(id) ?? null;
+    const accepted = intentSha ? d.ledger.getAcceptedIntent(intentSha) : undefined;
     return {
       task_id: id,
+      intent: accepted ? accepted.intent : null,
+      intent_sha256: accepted ? intentSha : null,
       contract,
       contract_sha256: contract
         ? contractHash(contract as unknown as Record<string, unknown>)

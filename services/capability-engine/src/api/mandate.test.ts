@@ -374,3 +374,160 @@ test("registering a mandate announces BUDGET_UPDATED for the root and the child"
   expect(ids).toContain(root.cap_id);
   expect(ids.length).toBeGreaterThanOrEqual(2);
 });
+
+// ---- E21: a new mandate replaces the old one ----
+
+const task = (app: Awaited<ReturnType<typeof setup>>["app"], payload: object = {}) =>
+  app.inject({ method: "POST", url: "/api/mandate/task", payload });
+
+/** Root A with child A1 (its own) and child A2 (from /api/mandate/task). */
+async function twoChildren() {
+  const s = await setup();
+  const rootA = await signedRoot(s.principal);
+  const a = (await postMandate(s.app, rootA)).json() as { cap_hash: string };
+  const t = (await task(s.app, { amount: "1.00" })).json() as { cap_hash: string };
+  return { ...s, rootA, rootAHash: capabilityHash(rootA), a1: a.cap_hash, a2: t.cap_hash };
+}
+const reserveOn = (ledger: Ledger, capHash: string, hash: string, amount = 100n) =>
+  ledger.reserve({
+    capHash,
+    taskId: "task_0123456789abcdef",
+    paymentHash: hash,
+    amount,
+    now: k.NOW,
+  });
+
+test("replace retires the old root", async () => {
+  const c = await twoChildren();
+  reserveOn(c.ledger, c.a1, "a".repeat(64));
+  const before = c.bus.replay().length;
+  const rootB = await signedRoot(c.principal, { max_total: "4.00" });
+  const r = await postMandate(c.app, rootB);
+  expect(r.statusCode).toBe(200);
+  const rootAId = c.rootA.cap_id;
+  const a2Id = (c.ledger.getCapability(c.a2) as ChildCapability).cap_id;
+  expect(r.json()).toMatchObject({ ok: true, retired: [rootAId, a2Id], in_flight: 1 });
+  expect(c.ledger.isRevoked(c.rootAHash)).toBe(true);
+  expect(c.ledger.isRevoked(c.a2)).toBe(true);
+  expect(c.ledger.hasOwnRevokedFlag(c.a1)).toBe(false);
+  const ev = c.bus.replay().slice(before);
+  expect(ev.map((e) => e.type)).toEqual([
+    "MANDATE_RETIRED",
+    "CAP_ROOT",
+    "CAP_CHILD",
+    "BUDGET_UPDATED",
+    "BUDGET_UPDATED",
+  ]);
+  const m = JSON.parse(JSON.stringify(ev[0]));
+  expect(m).toMatchObject({
+    type: "MANDATE_RETIRED",
+    cap_hash: capabilityHash(rootB),
+    retired: [rootAId, a2Id],
+  });
+  expect(typeof m.reason).toBe("string");
+  expect(m.at).toBe(k.NOW.toISOString());
+  // the new live mandate is B's child
+  const active = (await c.app.inject({ method: "GET", url: "/api/mandate/active" })).json();
+  expect(active.cap_hash).not.toBe(c.a1);
+  await c.app.close();
+});
+
+test("no derivation from a retired root", async () => {
+  const c = await twoChildren();
+  await postMandate(c.app, await signedRoot(c.principal, { max_total: "4.00" }));
+  const kids = () => c.ledger.latestChild();
+  const before = kids();
+  // task creation that names the retired root
+  const t = await task(c.app, { root_hash: c.rootAHash, amount: "1.00" });
+  expect(t.statusCode).toBe(422);
+  expect(t.json()).toMatchObject({ ok: false, code: "CAPABILITY_REVOKED" });
+  expect(t.json().message.length).toBeGreaterThan(10);
+  // re-posting the retired root
+  const again = await postMandate(c.app, c.rootA);
+  expect(again.json()).toMatchObject({ ok: false, code: "CAPABILITY_REVOKED" });
+  expect(kids()).toBe(before);
+  expect(c.ledger.latestRoot()).not.toBe(c.rootAHash);
+  await c.app.close();
+});
+
+test("idempotent: the same root twice retires nothing and emits no MANDATE_RETIRED", async () => {
+  const c = await twoChildren();
+  const rootB = await signedRoot(c.principal, { max_total: "4.00" });
+  await postMandate(c.app, rootB);
+  const n = c.bus.replay().filter((e) => e.type === "MANDATE_RETIRED").length;
+  const again = await postMandate(c.app, rootB);
+  expect(again.json()).toMatchObject({ ok: true, retired: [], in_flight: 0 });
+  expect(c.bus.replay().filter((e) => e.type === "MANDATE_RETIRED").length).toBe(n);
+  expect(n).toBe(1);
+  // the very first root posted twice: nothing retired either
+  const d = await setup();
+  const rootA = await signedRoot(d.principal);
+  await postMandate(d.app, rootA);
+  expect((await postMandate(d.app, rootA)).json()).toMatchObject({ retired: [] });
+  expect(d.bus.replay().some((e) => e.type === "MANDATE_RETIRED")).toBe(false);
+  await c.app.close();
+  await d.app.close();
+});
+
+test("remaining shown for the new root counts only its own reservations", async () => {
+  const c = await twoChildren();
+  reserveOn(c.ledger, c.a1, "a".repeat(64), 150n);
+  const rootB = await signedRoot(c.principal, { max_total: "4.00" });
+  const b = (await postMandate(c.app, rootB)).json() as { cap_hash: string };
+  const bHash = capabilityHash(rootB);
+  expect(c.ledger.remaining(bHash)).toBe(400n);
+  const last = [...c.bus.replay()]
+    .reverse()
+    .find((e) => e.type === "BUDGET_UPDATED" && e.data.cap_id === rootB.cap_id);
+  expect(last?.type === "BUDGET_UPDATED" && last.data.remaining).toBe("4.00");
+  // B's own reservation reduces B only; A's stays out of B's figure
+  reserveOn(c.ledger, b.cap_hash, "b".repeat(64), 100n);
+  expect(c.ledger.remaining(bHash)).toBe(300n);
+  await c.app.close();
+});
+
+// ---- security review fixes ----
+
+test("an in-flight child of a retired root cannot take a new spend intent, its payment still settles", async () => {
+  const c = await twoChildren();
+  reserveOn(c.ledger, c.a1, "a".repeat(64));
+  await postMandate(c.app, await signedRoot(c.principal, { max_total: "4.00" }));
+  expect(c.ledger.isRevoked(c.a1)).toBe(true);
+  const r = await c.app.inject({
+    method: "POST",
+    url: "/v0/messages",
+    payload: await spend(c.buyer, c.a1, k.W1),
+  });
+  expect(r.statusCode).toBe(422);
+  expect(r.json()).toMatchObject({ ok: false, code: "CAPABILITY_REVOKED" });
+  // a second reservation is refused too
+  expect(() => reserveOn(c.ledger, c.a1, "d".repeat(64))).toThrow();
+  // the existing payment finishes normally
+  expect(c.ledger.applyPaymentStatus("a".repeat(64), "Settled", k.NOW)?.state).toBe("committed");
+  await c.app.close();
+});
+
+test("downgrade: replaying a retired root is refused and the current mandate stays live", async () => {
+  const c = await twoChildren();
+  const rootB = await signedRoot(c.principal, { max_total: "4.00" });
+  await postMandate(c.app, rootB);
+  const r = await postMandate(c.app, c.rootA);
+  expect(r.json()).toMatchObject({ ok: false, code: "CAPABILITY_REVOKED" });
+  expect(c.ledger.isRevoked(capabilityHash(rootB))).toBe(false);
+  expect(c.ledger.latestRoot()).toBe(capabilityHash(rootB));
+  await c.app.close();
+});
+
+test("a failing event bus does not turn a committed mandate into a refusal", async () => {
+  const c = await twoChildren();
+  c.bus.publish = () => {
+    throw new Error("bus down");
+  };
+  const rootB = await signedRoot(c.principal, { max_total: "4.00" });
+  const r = await postMandate(c.app, rootB);
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toMatchObject({ ok: true });
+  expect(c.ledger.isRevoked(c.rootAHash)).toBe(true);
+  expect(c.ledger.isRevoked(capabilityHash(rootB))).toBe(false);
+  await c.app.close();
+});

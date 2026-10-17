@@ -55,6 +55,45 @@ describe("GET /api/tasks/:id/evidence", () => {
   });
 });
 
+describe("GET /api/tasks/:id/evidence intent", () => {
+  it("returns the accepted intent and its hash, never the preimage", async () => {
+    const { app, ledger } = await setup();
+    const f = chainFixtures();
+    const sha = "a".repeat(64);
+    ledger.recordAcceptedIntent(sha, "c".repeat(64), k.intent, "eip191:0xabc", k.NOW);
+    ledger.recordOffer(
+      {
+        intentSha256: sha,
+        paymentHash: f.contract.payment.payment_hash,
+        taskId: f.verdict.task_id,
+        contract: f.contract,
+        preimageHex: "b".repeat(64),
+        sealedPreimage: "sealed",
+      },
+      k.NOW,
+    );
+    ledger.registerContract(f.verdict.payment_hash, f.verdict.task_id, f.contract, k.NOW);
+    const r = await app.inject({ method: "GET", url: `/api/tasks/${f.verdict.task_id}/evidence` });
+    const j = r.json();
+    expect(j.intent).toEqual(JSON.parse(JSON.stringify(k.intent)));
+    expect(j.intent_sha256).toBe(sha);
+    expect(r.body).not.toMatch(/preimage/i);
+    expect(r.body).not.toContain("b".repeat(64));
+    expect(Object.keys(j)).not.toContain("preimage");
+  });
+
+  it("intent is null when the task has no accepted intent", async () => {
+    const { app, ledger } = await setup();
+    const f = chainFixtures();
+    ledger.registerContract(f.verdict.payment_hash, f.verdict.task_id, f.contract, k.NOW);
+    const j = (
+      await app.inject({ method: "GET", url: `/api/tasks/${f.verdict.task_id}/evidence` })
+    ).json();
+    expect(j.intent).toBeNull();
+    expect(j.intent_sha256).toBeNull();
+  });
+});
+
 describe("GET /api/tasks", () => {
   it("is empty before any offer", async () => {
     const { app } = await setup();

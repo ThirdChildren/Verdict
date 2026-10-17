@@ -563,4 +563,55 @@ describe("engine <-> wallet escrow (FakeWallet)", () => {
     expect(c.bus.replay().some((e) => e.type === "VERDICT")).toBe(false);
     await c.app.close();
   });
+
+  it("retired child closes on settle", async () => {
+    const c = await setup();
+    const t = await accepted(c);
+    const inv = await invoice(c, t.hash, 120n);
+    await post(c.app, c.worker, c.engine, "HODL_INVOICE", t.tid, {
+      bolt11: inv.bolt11,
+      payment_hash: t.hash,
+    });
+    const principal = await createEd25519Signer(seed(1));
+    const base = {
+      ...k.root,
+      issuer: principal.publicId,
+      max_total: "4.00",
+      max_per_task: "2.00",
+      allowed_payees: [c.worker.publicId],
+      expires_at: "2026-10-18T17:00:00Z",
+    } as RootCapability;
+    const withId = { ...base, cap_id: capId(base) };
+    const rootB = { ...withId, signature: await signPayload(principal, "CAP_ROOT", withId) };
+    const m = await c.app.inject({ method: "POST", url: "/api/mandate", payload: { root: rootB } });
+    expect(m.json()).toMatchObject({ ok: true, in_flight: 1 });
+    // in flight: the old child keeps its permission and its reservation
+    expect(c.ledger.hasOwnRevokedFlag(c.capHash)).toBe(false);
+    expect(c.ledger.getByPaymentHash(t.hash)?.state).toBe("reserved");
+    await c.workerWallet.claimHodlInvoice(t.hash, t.preimage);
+    // settled: the reservation moved as before, then the child is revoked
+    expect(c.ledger.getByPaymentHash(t.hash)?.state).toBe("committed");
+    expect(c.ledger.hasOwnRevokedFlag(c.capHash)).toBe(true);
+    await c.app.close();
+  });
+
+  it("a retired child whose payment fails is revoked and its budget released", async () => {
+    const c = await setup();
+    const t = await accepted(c);
+    const inv = await invoice(c, t.hash, 120n);
+    await post(c.app, c.worker, c.engine, "HODL_INVOICE", t.tid, {
+      bolt11: inv.bolt11,
+      payment_hash: t.hash,
+    });
+    const rootCap = c.ledger.getCapability(
+      (c.child as ChildCapability).parent as string,
+    ) as RootCapability;
+    c.ledger.retireOtherRoots("f".repeat(64), k.NOW);
+    expect(rootCap.cap_id).toBeDefined();
+    expect(c.ledger.hasOwnRevokedFlag(c.capHash)).toBe(false);
+    await c.workerWallet.cancelHodlInvoice(t.hash);
+    expect(c.ledger.getByPaymentHash(t.hash)?.state).toBe("released");
+    expect(c.ledger.hasOwnRevokedFlag(c.capHash)).toBe(true);
+    await c.app.close();
+  });
 });
