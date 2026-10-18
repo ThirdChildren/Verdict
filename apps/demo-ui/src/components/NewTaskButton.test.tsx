@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MOCK_TASK_TYPES } from "../lib/taskTypes.js";
 import { MOCK_EVENTS } from "../mock/events.js";
@@ -405,5 +405,24 @@ describe("NewTaskButton acceptance test", () => {
     expect(
       await within(d).findByText(/A blog post cannot be tested\. Nothing was installed/),
     ).toBeTruthy();
+  });
+});
+
+describe("NewTaskButton announced task types (E33)", () => {
+  it("lists a type announced by TASK_TYPE_ADDED that the engine list does not show yet", async () => {
+    stubFetch(
+      () => json(200, { task_types: MOCK_TASK_TYPES }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    act(() =>
+      useStore.getState().addTaskType({
+        id: "custom-sum-12345678",
+        title: "Sum two numbers",
+        package_sha256: "a".repeat(64),
+      }),
+    );
+    await waitFor(() => expect(within(d).getAllByRole("radio")).toHaveLength(3));
+    expect(within(d).getByText("Sum two numbers")).toBeTruthy();
   });
 });

@@ -191,3 +191,30 @@ describe("TASK_REFUSED", () => {
     expect(useStore.getState().refusals).toEqual([]);
   });
 });
+
+describe("TASK_TYPE_ADDED (E33)", () => {
+  it("is parsed from the SSE payload and stored once per id, newest first", async () => {
+    const { parseTypeAddedEvent } = await import("./lib/authoring.js");
+    const ev = (id: string, title: string) =>
+      JSON.stringify({
+        type: "TASK_TYPE_ADDED",
+        seq: 1,
+        at: "2026-01-01T00:00:00Z",
+        data: { id, title, package_sha256: "a".repeat(64) },
+      });
+    const a = parseTypeAddedEvent(ev("custom-sum-12345678", "Sum two numbers"));
+    expect(a).toMatchObject({ id: "custom-sum-12345678", title: "Sum two numbers" });
+    if (!a) throw new Error("not parsed");
+    useStore.getState().addTaskType(a);
+    useStore.getState().addTaskType({ ...a, id: "custom-other-87654321", title: "Other" });
+    useStore.getState().addTaskType(a);
+    expect(useStore.getState().addedTypes.map((t) => t.id)).toEqual([
+      "custom-sum-12345678",
+      "custom-other-87654321",
+    ]);
+    expect(parseTypeAddedEvent(JSON.stringify({ type: "BUDGET_UPDATED" }))).toBeNull();
+    expect(parseTypeAddedEvent("not json")).toBeNull();
+    useStore.getState().reset();
+    expect(useStore.getState().addedTypes).toEqual([]);
+  });
+});
