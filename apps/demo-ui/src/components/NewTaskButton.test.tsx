@@ -65,7 +65,7 @@ const open = async () => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("NewTaskButton task types", () => {
-  it("lists task types and selects the first by default", async () => {
+  it("lists task types with no default selection and START disabled", async () => {
     stubFetch(
       () => json(200, { task_types: MOCK_TASK_TYPES }),
       () => json(200, { ok: true }),
@@ -73,8 +73,17 @@ describe("NewTaskButton task types", () => {
     const d = await open();
     const radios = await within(d).findAllByRole("radio");
     expect(radios).toHaveLength(2);
-    expect((radios[0] as HTMLInputElement).checked).toBe(true);
+    expect(radios.every((x) => !(x as HTMLInputElement).checked)).toBe(true);
+    expect(
+      (within(d).getByRole("button", { name: /start task/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      within(d).getByText(
+        "Pick a test type, press CHECK to let the buyer agent map your text, or WRITE A TEST.",
+      ),
+    ).toBeTruthy();
     expect(within(d).getByText("json-normalise-v1")).toBeTruthy();
+    fireEvent.click(radios[0] as HTMLElement);
     expect(
       within(d).getByText(/The buyer agent confirms the match before any payment/),
     ).toBeTruthy();
@@ -192,8 +201,8 @@ describe("NewTaskButton task types", () => {
     );
     const d = await open();
     await within(d).findAllByRole("radio");
-    expect(within(d).getByText(/Using the type you selected: .*; no check needed\./)).toBeTruthy();
     fireEvent.click(within(d).getAllByRole("radio")[1] as HTMLElement);
+    expect(within(d).getByText(/Using the type you selected: .*; no check needed\./)).toBeTruthy();
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/api/plan"))).toBe(true));
     expect(calls.some((c) => c.url.endsWith("/api/route"))).toBe(false);
@@ -216,7 +225,7 @@ describe("NewTaskButton task types", () => {
           : json(200, { ok: true, cap_hash: "a".repeat(64) }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     expect(
       await within(d).findByText("The engine blocked the task: OVER_BUDGET Too much."),
@@ -232,7 +241,7 @@ describe("NewTaskButton task types", () => {
           : json(200, { ok: true, cap_hash: "a".repeat(64) }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     expect(
       await within(d).findByText("The buyer could not reach the engine: ECONNREFUSED"),
@@ -244,7 +253,7 @@ describe("NewTaskButton task types", () => {
       () => json(403, { ok: false, code: "FORBIDDEN_ORIGIN", message: "Origin refused." }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     expect(
       await within(d).findByText(
@@ -300,7 +309,7 @@ describe("NewTaskButton task types", () => {
             }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     const alert = await waitFor(() => {
       const a = within(d)
@@ -355,7 +364,7 @@ describe("task type list and refusal", () => {
         }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
     const alert = await waitFor(() => {
       const a = within(d)
@@ -431,6 +440,7 @@ describe("NewTaskButton acceptance test", () => {
     const d = await open();
     await fill(d, "sum two numbers");
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    fireEvent.click(await within(d).findByRole("button", { name: /^write a test$/i }));
     const panel = await within(d).findByRole("region", { name: /acceptance test/i });
     expect(within(panel).getByText(/reads a file and prints a result/)).toBeTruthy();
     expect(within(panel).getByText(/5 more cases stay hidden from the worker/)).toBeTruthy();
@@ -446,16 +456,16 @@ describe("NewTaskButton acceptance test", () => {
       "No type reads a poem.",
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     await fill(d, "write a poem");
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
     await within(d).findByText(/would map this text to none: No type reads a poem\./);
-    expect(within(d).getByText(/stands; START TASK uses it/)).toBeTruthy();
+    expect(within(d).getByText(/stands only if you confirm/)).toBeTruthy();
     expect(within(d).queryByText("Nothing was sent.")).toBeNull();
     expect(posted.some((c) => c.url.endsWith("/api/author"))).toBe(false);
   });
 
-  it("with no type selected, a none answer launches WRITE A TEST", async () => {
+  it("with no type selected, a none answer offers WRITE A TEST without launching it", async () => {
     const posted = stub(
       () => authorBody(),
       () => json(200, { ok: true }),
@@ -464,6 +474,9 @@ describe("NewTaskButton acceptance test", () => {
     const d = await open();
     await fill(d, "sum two numbers");
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findByText(/Nothing was sent\./);
+    expect(posted.some((c) => c.url.endsWith("/api/author"))).toBe(false);
+    fireEvent.click(within(d).getByRole("button", { name: /^write a test$/i }));
     await within(d).findByRole("region", { name: /acceptance test/i });
     expect(posted.some((c) => c.url.endsWith("/api/author"))).toBe(true);
   });
@@ -476,7 +489,7 @@ describe("NewTaskButton acceptance test", () => {
       `This is about ${MOCK_TASK_TYPES[1]?.title ?? ""}.`,
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
     await fill(d, "something");
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
     const sw = await within(d).findByRole("button", { name: /^use .* instead$/i });
@@ -495,6 +508,7 @@ describe("NewTaskButton acceptance test", () => {
     const d = await open();
     await fill(d, "sum two numbers");
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    fireEvent.click(await within(d).findByRole("button", { name: /^write a test$/i }));
     await within(d).findAllByText(/Nothing was installed\./);
     expect(d.textContent).not.toMatch(/Nothing was installed\. Nothing was installed\./);
   });
@@ -637,6 +651,107 @@ describe("NewTaskButton acceptance test", () => {
     expect(
       await within(d).findByText(/A blog post cannot be tested\. Nothing was installed/),
     ).toBeTruthy();
+  });
+});
+
+describe("NewTaskButton explicit override", () => {
+  const routeStub = (routeAnswer: () => Promise<Response>) =>
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      (url) =>
+        url.endsWith("/api/route")
+          ? routeAnswer()
+          : url.endsWith("/api/plan")
+            ? json(200, { ok: true, decision: { status: "FORWARDED" } })
+            : json(200, { ok: true, cap_hash: "a".repeat(64) }),
+    );
+  const none = () =>
+    json(422, { ok: false, code: "TASK_NOT_VERIFIABLE", message: "No type matches." });
+  const text = (d: HTMLElement, v: string) =>
+    fireEvent.change(within(d).getByLabelText(/what should the worker do/i), {
+      target: { value: v },
+    });
+
+  it("CHECK with no selection selects the routed type", async () => {
+    routeStub(() => json(200, { ok: true, package_id: "json-normalise-v1", reason: "JSON." }));
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findByText(/mapped this to JSON-NORMALISE-V1/);
+    expect((within(d).getAllByRole("radio")[1] as HTMLInputElement).checked).toBe(true);
+    expect(within(d).queryByRole("button", { name: /anyway/i })).toBeNull();
+    expect(
+      (within(d).getByRole("button", { name: /start task/i }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+  it("shows USE <TITLE> ANYWAY on disagreement and proceeds only on confirm; editing the text clears it", async () => {
+    const calls = routeStub(none);
+    const d = await open();
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
+    text(d, "develop a snake game");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    const title = MOCK_TASK_TYPES[0]?.title ?? "";
+    const word = await within(d).findByRole("button", { name: `Use ${title} anyway` });
+    expect(within(d).queryByRole("button", { name: /start task/i })).toBeNull();
+    expect(
+      within(d).getByText(
+        `The buyer agent would not map this text to ${title}; the worker will refuse the job if its test cannot verify it. Confirm to proceed.`,
+      ),
+    ).toBeTruthy();
+    expect(calls.some((c) => c.url.endsWith("/api/mandate/task"))).toBe(false);
+    text(d, "develop a snake game now");
+    expect(within(d).queryByRole("button", { name: /anyway/i })).toBeNull();
+    expect(within(d).getByRole("button", { name: /start task/i })).toBeTruthy();
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    fireEvent.click(await within(d).findByRole("button", { name: `Use ${title} anyway` }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/api/mandate/task"))).toBe(true));
+    expect(word).toBeTruthy();
+  });
+  it("a successful install selects the custom type and clears the override", async () => {
+    const posted: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method !== "POST") return json(200, { task_types: MOCK_TASK_TYPES });
+        posted.push(url);
+        if (url.endsWith("/api/route")) return none();
+        if (url.endsWith("/api/author"))
+          return json(200, {
+            ok: true,
+            feasibility: "cli",
+            reason: "ok",
+            draft: {
+              title: "Snake",
+              description: "d",
+              entry: "main.py",
+              input_ext: "txt",
+              visible: [{ input: "1", expected: "1" }],
+              hidden: [{ input: "2", expected: "2" }],
+              assertions: {},
+            },
+          });
+        return json(200, {
+          ok: true,
+          id: "snake-v1",
+          title: "Snake",
+          package_sha256: "b".repeat(64),
+        });
+      }),
+    );
+    const d = await open();
+    fireEvent.click((await within(d).findAllByRole("radio"))[0] as HTMLElement);
+    text(d, "develop a snake game");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findByRole("button", { name: /anyway/i });
+    fireEvent.click(within(d).getByRole("button", { name: /^write a test$/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    fireEvent.click(within(d).getByRole("button", { name: /install/i }));
+    await within(d).findByText(/Installed: .*Snake/);
+    expect(within(d).queryByRole("button", { name: /anyway/i })).toBeNull();
+    const start = within(d).getByRole("button", { name: /start task/i }) as HTMLButtonElement;
+    expect(start.disabled).toBe(false);
+    const radios = within(d).getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.find((x) => x.checked)?.value).toBe("snake-v1");
   });
 });
 

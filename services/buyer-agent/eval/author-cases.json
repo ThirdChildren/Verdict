@@ -22,6 +22,8 @@
     { "request": "Build a login form", "label": "reframe" },
     { "request": "Write a chess move validator", "label": "reframe" },
     { "request": "Implement the 2048 game", "label": "reframe" },
+    { "request": "develop snake game code", "label": "reframe" },
+    { "request": "WRITE A TEST for \"develop snake game code\"", "label": "reframe" },
     { "request": "Write a blog post about remote work", "label": "none" },
     { "request": "Translate this document into French", "label": "none" },
     { "request": "Do market research on electric bikes", "label": "none" },

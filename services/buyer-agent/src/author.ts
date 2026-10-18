@@ -60,52 +60,134 @@ export type AuthorDraft = {
 export const NOT_VERIFIABLE_TEXT =
   "Verdict cannot pay for this: no fixed input and output can decide whether it is done, so no test could release the money. It verifies programs that read an input and print an output.";
 
-export class DraftError extends Error {}
+export class DraftError extends Error {
+  constructor(
+    message: string,
+    readonly counts: { visible: number; hidden: number } = { visible: 0, hidden: 0 },
+  ) {
+    super(message);
+  }
+}
 
 const stripFence = (s: string): string => {
   const m = /^\s*```[A-Za-z0-9]*[ \t]*\r?\n([\s\S]*?)\r?\n?```\s*$/.exec(s);
   return m ? (m[1] ?? "") : s;
 };
 
-/** Hygiene before the draft leaves the buyer: fences stripped, nothing empty, inputs distinct, outputs vary. */
+const clip = (s: string, n = 40): string => {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n)}...` : t;
+};
+const norm = (s: string): string =>
+  s
+    .split("\n")
+    .map((l) => l.trim())
+    .join("\n")
+    .trim();
+
+export type CleanedDraft = { draft: AuthorDraft; dropped: number };
+
+/**
+ * Deterministic cleanup, then hygiene. Exact-duplicate inputs are dropped (first kept). If at least 5 hidden and 3
+ * visible distinct cases remain, surplus cases are only re-labelled between the two lists (nothing is invented).
+ * Otherwise a DraftError names the collisions / empty / all-equal outputs so the retry can be specific.
+ */
 export function cleanDraft(d: AuthorModelOutput): AuthorDraft {
+  return cleanDraftDetailed(d).draft;
+}
+
+export function cleanDraftDetailed(d: AuthorModelOutput): CleanedDraft {
   const fix = (p: AuthorPair): AuthorPair => ({
     input: stripFence(p.input),
     expected: stripFence(p.expected),
   });
-  const visible = (d.visible ?? []).map(fix);
-  const hidden = (d.hidden ?? []).map(fix);
-  const all = [...visible, ...hidden];
-  if (all.some((p) => p.input.trim() === "" || p.expected.trim() === ""))
-    throw new DraftError("a test case has an empty input or output");
-  const inputs = new Set(all.map((p) => p.input.trim()));
-  if (inputs.size !== all.length) throw new DraftError("two test cases use the same input");
-  const outs = new Set(
-    all.map((p) =>
-      p.expected
-        .split("\n")
-        .map((l) => l.trim())
-        .join("\n")
-        .trim(),
-    ),
+  const seen = new Set<string>();
+  const collided: string[] = [];
+  const dedupe = (ps: AuthorPair[]): AuthorPair[] =>
+    ps.map(fix).filter((p) => {
+      const k = p.input.trim();
+      if (k === "") return true;
+      if (seen.has(k)) {
+        collided.push(clip(k));
+        return false;
+      }
+      seen.add(k);
+      return true;
+    });
+  let visible = dedupe(d.visible ?? []);
+  let hidden = dedupe(d.hidden ?? []);
+  const empty = [...visible, ...hidden].filter(
+    (p) => p.input.trim() === "" || p.expected.trim() === "",
   );
-  if (outs.size < 2) throw new DraftError("every test case expects the same output");
+  if (empty.length > 0)
+    throw new DraftError(
+      `a test case has an empty input or output (empty: ${empty
+        .map((p) =>
+          p.input.trim() === "" ? "input" : `expected output for input "${clip(p.input)}"`,
+        )
+        .join("; ")})`,
+    );
+  // Re-label only: move surplus between the lists to reach 3 visible and 5 hidden.
+  while (visible.length < 3 && hidden.length > 5) {
+    visible = [...visible, hidden[0] as AuthorPair];
+    hidden = hidden.slice(1);
+  }
+  while (hidden.length < 5 && visible.length > 3) {
+    hidden = [...hidden, visible[visible.length - 1] as AuthorPair];
+    visible = visible.slice(0, -1);
+  }
+  if (visible.length < 3 || hidden.length < 5)
+    throw new DraftError(
+      collided.length > 0
+        ? `two test cases use the same input (colliding inputs: ${collided.map((c) => `"${c}"`).join(", ")}); only ${visible.length} visible and ${hidden.length} hidden distinct cases remain, need 3 and 5`
+        : `only ${visible.length} visible and ${hidden.length} hidden distinct cases, need 3 and 5`,
+      { visible: visible.length, hidden: hidden.length },
+    );
+  const all = [...visible, ...hidden];
+  if (new Set(all.map((p) => norm(p.expected))).size < 2)
+    throw new DraftError(
+      `every test case expects the same output (all equal: "${clip(all[0]?.expected ?? "")}")`,
+      { visible: visible.length, hidden: hidden.length },
+    );
   return {
-    title: d.title ?? "",
-    description: d.description ?? "",
-    entry: d.entry ?? "",
-    input_ext: d.input_ext ?? ".txt",
-    visible,
-    hidden,
-    assertions: d.assertions ?? {},
+    draft: {
+      title: d.title ?? "",
+      description: d.description ?? "",
+      entry: d.entry ?? "",
+      input_ext: d.input_ext ?? ".txt",
+      visible,
+      hidden,
+      assertions: d.assertions ?? {},
+    },
+    dropped: collided.length,
   };
 }
+
+/** Appended to the author prompt for the retry; `complaint` names what was wrong. */
+export const retryNote = (complaint: string): string =>
+  `Your previous draft was rejected: ${complaint}. Every visible and hidden input must be distinct (differ in state or move), every expected output non-empty, and outputs must not all be equal. Write 3 visible and 5 to 8 hidden cases.`;
+
+export type AuthorResult = {
+  request: string;
+  feasibility: "cli" | "reframe" | "none" | "failed";
+  reason: string;
+  visible: number;
+  hidden: number;
+  attempts: number;
+  hygiene?: string;
+};
+
+/** The I/O contract a game or interactive program must be reframed into (also checked by the plumbing test). */
+export const REFRAME_CONTRACT =
+  'The program reads a JSON file {"state":{...},"move":"..."} from argv[2] and prints the next state as canonical JSON (keys sorted, no whitespace). For a grid game such as snake the state is {"grid":[w,h],"snake":[[x,y],...],"food":[x,y],"dir":"R","alive":true} (snake[0] is the head, x to the right, y downward) and move is one of U, D, L, R. Example: input {"state":{"grid":[5,5],"snake":[[2,2],[1,2]],"food":[4,4],"dir":"R","alive":true},"move":"R"} -> {"alive":true,"dir":"R","food":[4,4],"grid":[5,5],"snake":[[3,2],[2,2]]}.';
+export const SNAKE_SCENARIOS =
+  "For a game write eight distinct scenarios, each input differing in state or move: (1) a normal move, (2) a turn, (3) eat food and grow, (4) wall collision gives alive false, (5) self collision gives alive false, (6) a move into the opposite direction is ignored, (7) a move after death leaves the state unchanged, (8) a two-step case (the state after one move, then another move).";
 
 export const AUTHOR_SYSTEM = `You write the acceptance test for a piece of work a person wants to buy. A separate verifier will run a program against your test and pay only if it passes; you never grade.
 The verifier can only check a command line program: it is run as "node program.mjs <input file>" and judged by its printed standard output, compared as exact text after trimming each line. Reply with a single JSON object only. Write "reason" FIRST.
 Fields:
 - reason: one sentence (max 200 chars) justifying the feasibility
-- feasibility: "cli" if the request is already a program that reads one input and prints one output (sum numbers, word count, CSV column filter, date reformat, unit conversion, dedupe lines, JSON field extraction, Roman numerals); "reframe" if it is interactive (a game, a UI, a web app): turn it into its logic as a command line program that reads a JSON state and a move and prints the new state, e.g. a snake game becomes a snake.mjs that reads {"board","snake","food","move"} and prints {"snake","food","alive"}. For a game or UI the program reads a JSON state and a move from the input file and prints the next state as JSON. Worked example (two DISTINCT inputs, different outputs): input {"board":[5,5],"snake":[[2,2],[2,1]],"food":[0,0],"move":"right"} -> {"snake":[[2,3],[2,2]],"food":[0,0],"alive":true}; input {"board":[5,5],"snake":[[0,4],[0,3]],"food":[1,1],"move":"right"} -> {"snake":[[0,4],[0,3]],"food":[1,1],"alive":false}. Never repeat an input; "none" if no fixed input and output can decide that it is done (research, opinions, designs, translations, prose, scraping, anything whose right answer is not one exact text).
+- feasibility: "cli" if the request is already a program that reads one input and prints one output (sum numbers, word count, CSV column filter, date reformat, unit conversion, dedupe lines, JSON field extraction, Roman numerals); "reframe" if it is interactive (a game, a UI, a web app): turn it into a state/action step function as a command line program. ${REFRAME_CONTRACT} ${SNAKE_SCENARIOS} For a non-game UI or app use the same shape: input {"state":{...},"move":"<action>"}, output the next state as canonical JSON. Never repeat an input; "none" if no fixed input and output can decide that it is done (research, opinions, designs, translations, prose, scraping, anything whose right answer is not one exact text).
 - reframe: only for "reframe": one sentence (max 300 chars) saying what program will be tested instead
 For "none" write only reason and feasibility. For "cli" and "reframe" also write:
 - title (max 60), description (max 600; say exactly what the program reads and prints, the output format, and every edge case, because the worker sees only this and the visible cases)

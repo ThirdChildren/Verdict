@@ -4,10 +4,12 @@ import type { z } from "zod";
 import {
   AUTHOR_SYSTEM,
   type AuthorDraft,
+  type AuthorResult,
   authorSchema,
-  cleanDraft,
+  cleanDraftDetailed,
   DraftError,
   NOT_VERIFIABLE_TEXT,
+  retryNote,
 } from "./author.js";
 import type { WorkerDirectory } from "./identities.js";
 import {
@@ -58,10 +60,14 @@ export type AgentConfig = {
    * (TASK_NOT_VERIFIABLE) what no package fits. When absent no routing happens (unit tests of older paths).
    */
   taskTypes?: () => Promise<RouteTaskType[]>;
+  /** Called once per authoring outcome (drafted, none, failed); the server logs it and emits author.result. */
+  onAuthorResult?: (r: AuthorResult) => void;
 };
 
 export const ROUTE_TIMEOUT_MS = 30_000;
 export const AUTHOR_TIMEOUT_MS = 90_000;
+/** First draft plus two retries, each with the specific complaint. */
+export const AUTHOR_MAX_ATTEMPTS = 3;
 
 export type Route = { package_id: string; reason: string };
 
@@ -160,7 +166,7 @@ export class BuyerAgent {
     const attempt = async (complaint?: string): Promise<z.infer<typeof authorSchema>> => {
       const left = Math.max(1, deadline - Date.now());
       const user = complaint
-        ? `Request: ${request}\n\nYour previous draft was rejected: ${complaint}. Every visible and hidden input must be distinct, every expected output non-empty, and outputs must not all be equal.`
+        ? `Request: ${request}\n\n${retryNote(complaint)}`
         : `Request: ${request}`;
       try {
         return (
@@ -179,27 +185,58 @@ export class BuyerAgent {
         throw err;
       }
     };
-    const build = (v: z.infer<typeof authorSchema>) => ({
-      feasibility: v.feasibility as "cli" | "reframe",
-      reason: v.reason,
-      ...(v.reframe !== undefined ? { reframe: v.reframe } : {}),
-      draft: cleanDraft(v),
-    });
-    let v = await attempt();
-    if (v.feasibility === "none") throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
-    try {
-      return build(v);
-    } catch (err) {
-      if (!(err instanceof DraftError)) throw err;
-      const complaint = err.message;
-      v = await attempt(complaint);
-      if (v.feasibility === "none")
-        throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
+    let attempts = 0;
+    const report = (r: Omit<AuthorResult, "request" | "attempts">) => {
+      const full: AuthorResult = { request: request.slice(0, 120), attempts, ...r };
+      this.cfg.onAuthorResult?.(full);
+    };
+    let complaint: string | undefined;
+    for (;;) {
+      attempts++;
+      let v: z.infer<typeof authorSchema>;
       try {
-        return build(v);
-      } catch (err2) {
-        if (err2 instanceof DraftError) throw failed(err2.message);
-        throw err2;
+        v = await attempt(complaint);
+      } catch (err) {
+        if (err instanceof AgentError)
+          report({
+            feasibility: "failed",
+            reason: "",
+            visible: 0,
+            hidden: 0,
+            hygiene: err.message,
+          });
+        throw err;
+      }
+      if (v.feasibility === "none") {
+        report({ feasibility: "none", reason: v.reason, visible: 0, hidden: 0 });
+        throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
+      }
+      try {
+        const { draft } = cleanDraftDetailed(v);
+        report({
+          feasibility: v.feasibility,
+          reason: v.reason,
+          visible: draft.visible.length,
+          hidden: draft.hidden.length,
+        });
+        return {
+          feasibility: v.feasibility,
+          reason: v.reason,
+          ...(v.reframe !== undefined ? { reframe: v.reframe } : {}),
+          draft,
+        };
+      } catch (err) {
+        if (!(err instanceof DraftError)) throw err;
+        if (attempts >= AUTHOR_MAX_ATTEMPTS) {
+          report({
+            feasibility: "failed",
+            reason: v.reason,
+            ...err.counts,
+            hygiene: err.message,
+          });
+          throw failed(err.message);
+        }
+        complaint = err.message;
       }
     }
   }

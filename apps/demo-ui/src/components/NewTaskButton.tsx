@@ -94,6 +94,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [chosen, setChosen] = useState<string | null>(null);
   // CHECK disagreed with the selected type: information, not a refusal.
   const [disagree, setDisagree] = useState<{ reason: string } | null>(null);
+  // The last routing answer, keyed by the text it was asked about; editing the text makes it stale.
+  const [routed, setRouted] = useState<{ text: string; id: string | null } | null>(null);
   // The raw body of the last failed answer, for the operator.
   const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const noteAnswer = (err: unknown) =>
@@ -143,8 +145,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   ];
   const customSha = (id: string): string | undefined =>
     addedTypes.find((a) => a.id === id)?.package_sha256 || undefined;
-  // Default: the first listed type, until the user picks another.
-  const selectedType = list.find((t) => t.id === chosen)?.id ?? list[0]?.id ?? null;
+  // No default: nothing runs under a test the user did not choose or the buyer agent did not route.
+  const selectedType = list.find((t) => t.id === chosen)?.id ?? null;
   const { reset } = form;
 
   // Only a signal that changes while this button is mounted opens the dialog: a key pressed earlier is stale.
@@ -163,6 +165,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setChosen(null);
       setMapped(null);
       setDisagree(null);
+      setRouted(null);
       setDraft(null);
       setEdits(null);
       setAuthorError(null);
@@ -187,9 +190,11 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       const r = await route.mutateAsync(description.trim());
       setMapped({ id: r.package_id, reason: r.reason });
       setChosen(r.package_id);
+      setRouted({ text: description.trim(), id: r.package_id });
     } catch (err) {
       noteAnswer(err);
       if (err instanceof ApiError && isUnverifiable(err.code)) {
+        setRouted({ text: description.trim(), id: null });
         if (selectedType !== null) {
           // The user's selection stands; the disagreement is shown as information.
           setDisagree({ reason: err.detail.reason ?? "" });
@@ -199,8 +204,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
             types: err.taskTypes ?? null,
             reason: err.detail.reason,
           });
-          // None matched and nothing is selected: offer the way out, by writing the acceptance test.
-          void writeTest();
+          // None matched and nothing is selected: WRITE A TEST is offered, never launched.
         }
       } else setFailure(explainError(err, "Something went wrong."));
     }
@@ -238,6 +242,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
         rules: rulesOf(draft.assertions).length,
       });
       setChosen(r.id);
+      setRouted(null);
       setDraft(null);
       setEdits(null);
       setRefusal(null);
@@ -273,6 +278,12 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const amount = form.watch("amount");
   const description = form.watch("description");
   const errors = form.formState.errors;
+  const selectedTitle = list.find((t) => t.id === selectedType)?.title ?? "";
+  const overridden =
+    selectedType !== null &&
+    routed !== null &&
+    routed.text === description.trim() &&
+    routed.id !== selectedType;
   return (
     <section aria-label="New task">
       <Button
@@ -375,7 +386,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 <p role="status" className="text-base">
                   The buyer agent would map this text to none
                   {disagree.reason ? `: ${disagree.reason}` : "."} Your selection (
-                  {list.find((t) => t.id === selectedType)?.title}) stands; START TASK uses it, and
+                  {list.find((t) => t.id === selectedType)?.title}) stands only if you confirm, and
                   the worker will refuse the job if it cannot be verified by that test.
                   {(() => {
                     const alt = list.find(
@@ -529,6 +540,17 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 </pre>
               </details>
             )}
+            {overridden && (
+              <p role="status" className="text-base">
+                The buyer agent would not map this text to {selectedTitle}; the worker will refuse
+                the job if its test cannot verify it. Confirm to proceed.
+              </p>
+            )}
+            {selectedType === null && (
+              <p role="status" className="text-base text-subtle">
+                Pick a test type, press CHECK to let the buyer agent map your text, or WRITE A TEST.
+              </p>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
@@ -549,9 +571,20 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
               >
                 {author.isPending ? "Writing..." : "Write a test"}
               </Button>
-              <Button type="submit" disabled={start.isPending || selectedType === null}>
-                {start.isPending ? "Sending..." : "Start task"}
-              </Button>
+              {overridden ? (
+                <Button
+                  type="button"
+                  disabled={start.isPending}
+                  onClick={() => void submit()}
+                  className="uppercase"
+                >
+                  {start.isPending ? "Sending..." : `Use ${selectedTitle} anyway`}
+                </Button>
+              ) : (
+                <Button type="submit" disabled={start.isPending || selectedType === null}>
+                  {start.isPending ? "Sending..." : "Start task"}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>

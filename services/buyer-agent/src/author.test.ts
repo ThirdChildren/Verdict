@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { FakeLlm } from "@verdict/llm";
 import { describe, expect, test } from "vitest";
 import { BuyerAgent } from "./agent.js";
-import { authorSchema, NOT_VERIFIABLE_TEXT } from "./author.js";
+import { AUTHOR_SYSTEM, authorSchema, NOT_VERIFIABLE_TEXT, REFRAME_CONTRACT } from "./author.js";
 import { loadAuthorCases, runAuthorEval } from "./author-eval.js";
 import { buildServer } from "./server.js";
 
@@ -129,7 +129,7 @@ describe("POST /api/author", () => {
     ["empty input", draft({ hidden: [...pairs(4, "h"), { input: "", expected: "5" }] })],
     ["fenced empty", draft({ hidden: [...pairs(4, "h"), { input: "z", expected: "```\n```" }] })],
   ])("hygiene refuses %s", async (_n, d) => {
-    const r = await post([d]);
+    const r = await post([d, d, d]);
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("AUTHOR_FAILED");
   });
@@ -150,9 +150,73 @@ describe("POST /api/author", () => {
     expect(last).toContain("Your previous draft was rejected: two test cases use the same input");
   });
 
+  test("two hygiene retries still failing answer AUTHOR_FAILED naming the collision (three calls)", async () => {
+    const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
+    const llm = new FakeLlm([dup, dup, dup]);
+    const app = buildServer({ logger: false, llm, workers: {} });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/author",
+      payload: { request: "snake" },
+    });
+    const ev = (await app.inject({ method: "GET", url: "/api/events" })).json().events;
+    await app.close();
+    expect(r.statusCode).toBe(422);
+    expect(llm.calls).toHaveLength(3);
+    expect(JSON.stringify(llm.calls[2]?.messages)).toContain('colliding inputs: \\"v0 1\\"');
+    const res = ev.find((e: { type: string }) => e.type === "author.result");
+    expect(res.data).toMatchObject({ feasibility: "failed", visible: 3, hidden: 4, attempts: 3 });
+    expect(res.data.hygiene).toContain("v0 1");
+  });
+
+  test("duplicate inputs are dropped (first kept) and the draft accepted when enough remain", async () => {
+    const d = draft({
+      hidden: [...pairs(8, "h")],
+      visible: [...pairs(2, "v"), { input: "v0 1", expected: "9" }],
+    });
+    const b = (await post([d])).json();
+    expect(b.draft.visible).toHaveLength(3);
+    expect(b.draft.hidden).toHaveLength(7);
+    expect(b.draft.visible.map((p: { input: string }) => p.input)).toEqual([
+      "v0 1",
+      "v1 2",
+      "h0 1",
+    ]);
+  });
+
+  test("too few after cleanup retries with the named collisions, then accepts", async () => {
+    const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
+    const llm = new FakeLlm([dup, draft()]);
+    const app = buildServer({ logger: false, llm, workers: {} });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/author",
+      payload: { request: "snake" },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(200);
+    expect(JSON.stringify(llm.calls[1]?.messages)).toContain("colliding inputs");
+  });
+
+  test("author.result carries request, feasibility, reason and counts, no case contents", async () => {
+    const app = buildServer({ logger: false, llm: new FakeLlm([snake]), workers: {} });
+    await app.inject({ method: "POST", url: "/api/author", payload: { request: "x".repeat(200) } });
+    const ev = (await app.inject({ method: "GET", url: "/api/events" })).json().events;
+    await app.close();
+    const res = ev.find((e: { type: string }) => e.type === "author.result").data;
+    expect(res).toEqual({
+      request: "x".repeat(120),
+      feasibility: "reframe",
+      reason: "Fixed input and output.",
+      visible: 3,
+      hidden: 5,
+      attempts: 1,
+    });
+  });
+
   test("two hygiene failures answer AUTHOR_FAILED with the plain message", async () => {
     const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
-    const r = await post([dup, dup]);
+    const r = await post([dup, dup, dup]);
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("AUTHOR_FAILED");
     expect(r.json().message).toContain("two test cases use the same input");
@@ -184,10 +248,14 @@ describe("POST /api/author", () => {
 
 describe("author-eval plumbing", () => {
   const cases = loadAuthorCases(join(import.meta.dirname, "../eval/author-cases.json"));
-  test("24 cases, 8 per label", () => {
-    expect(cases).toHaveLength(24);
-    for (const l of ["cli", "reframe", "none"])
-      expect(cases.filter((c) => c.label === l)).toHaveLength(8);
+  test("26 cases, 8 cli, 10 reframe, 8 none", () => {
+    expect(cases).toHaveLength(26);
+    for (const [l, n] of [
+      ["cli", 8],
+      ["reframe", 10],
+      ["none", 8],
+    ] as const)
+      expect(cases.filter((c) => c.label === l)).toHaveLength(n);
   });
   test("scripted replies reproduce each label through the HTTP outcome", async () => {
     const replies = cases.map((c) =>
@@ -197,7 +265,7 @@ describe("author-eval plumbing", () => {
       new BuyerAgent({ llm: new FakeLlm(replies), workers: {} }),
       cases,
     );
-    expect([r.correct, r.noneAccepted]).toEqual([24, 0]);
+    expect([r.correct, r.noneAccepted]).toEqual([26, 0]);
   });
   test("a model that drafts everything counts 8 none accepted", async () => {
     const r = await runAuthorEval(
@@ -205,6 +273,31 @@ describe("author-eval plumbing", () => {
       cases,
     );
     expect([r.correct, r.noneAccepted]).toEqual([8, 8]);
+  });
+  test("the reframe prompt fixes the state/move contract and the eight snake scenarios", () => {
+    expect(AUTHOR_SYSTEM).toContain(REFRAME_CONTRACT);
+    for (const k of [
+      '"state"',
+      '"move"',
+      "argv[2]",
+      '"grid":[w,h]',
+      '"snake":[[x,y]',
+      '"dir":"R"',
+      "U, D, L, R",
+    ])
+      expect(AUTHOR_SYSTEM).toContain(k);
+    for (const k of [
+      "normal move",
+      "a turn",
+      "eat food and grow",
+      "wall collision",
+      "self collision",
+      "opposite direction is ignored",
+      "after death",
+      "two-step",
+    ])
+      expect(AUTHOR_SYSTEM).toContain(k);
+    expect(AUTHOR_SYSTEM).toContain("eight distinct scenarios");
   });
   test("per-case HTTP outcome matches the label", async () => {
     for (const c of cases) {

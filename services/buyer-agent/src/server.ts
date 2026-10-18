@@ -68,6 +68,10 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           ...(deps.now ? { now: deps.now } : {}),
           ...(deps.taskTypes ? { taskTypes: deps.taskTypes } : {}),
           ...(deps.llmTimeoutMs !== undefined ? { timeoutMs: deps.llmTimeoutMs } : {}),
+          onAuthorResult: (r) => {
+            app.log.info(r, "author result");
+            emit("author.result", r);
+          },
         })
       : null;
 

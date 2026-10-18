@@ -231,7 +231,7 @@ export const SCENES: Scene[] = [
   { id: "mandates-history", label: "14 · Two mandates (history)", ...twoMandates() },
   {
     id: "refused",
-    label: '15 · Refused request (open NEW TASK, goal "develop a snake game")',
+    label: '15 · Refused request (open NEW TASK, goal "develop a snake game", pick no type, CHECK)',
     events: upto(state("CLAIMED")),
     refusals: [
       {
@@ -242,7 +242,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "author",
-    label: '16 · Write a test (open NEW TASK, goal "sum two numbers", WRITE A TEST)',
+    label: '16 · Write a test (open NEW TASK, goal "sum two numbers", CHECK then WRITE A TEST)',
     events: upto(state("CLAIMED")),
   },
 ];
