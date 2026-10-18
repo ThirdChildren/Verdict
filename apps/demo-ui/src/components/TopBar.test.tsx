@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { RootCapability } from "@verdict/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -76,5 +76,66 @@ describe("new mandate word", () => {
     barWith({ ...root, expires_at: "2020-01-01T00:00:00Z" });
     expect(screen.getByRole("button", { name: /new mandate/i })).toBeTruthy();
     expect(screen.getAllByText(/Mandate expired/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("navbar controls", () => {
+  const handlers = () => ({
+    onTogglePresenter: vi.fn(),
+    onHelp: vi.fn(),
+    onToggleInspector: vi.fn(),
+    onAgents: vi.fn(),
+  });
+  const barWithHandlers = (h: ReturnType<typeof handlers>, presenter = false) =>
+    render(
+      <ThemeProvider>
+        <TopBar
+          state={initialState}
+          root={null}
+          inspectorOpen={false}
+          presenter={presenter}
+          onReconnect={() => {}}
+          onMandate={() => {}}
+          onNewMandate={() => {}}
+          {...h}
+        />
+      </ThemeProvider>,
+    );
+  it("keeps four icon controls in the bar and no text-only words", () => {
+    barWithHandlers(handlers());
+    const nav = screen.getByRole("navigation", { name: "View" });
+    const names = within(nav)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "Agents: what each agent did",
+      "Technical details",
+      "Switch to dark theme",
+      "More",
+    ]);
+    expect(screen.queryByRole("button", { name: "Keyboard shortcuts" })).toBeNull();
+  });
+  it("icon buttons call their handlers", async () => {
+    const h = handlers();
+    barWithHandlers(h);
+    await userEvent.click(screen.getByRole("button", { name: /agents/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Technical details" }));
+    expect(h.onAgents).toHaveBeenCalledTimes(1);
+    expect(h.onToggleInspector).toHaveBeenCalledTimes(1);
+  });
+  it("the More menu holds presenter size and the shortcut list", async () => {
+    const h = handlers();
+    barWithHandlers(h);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Presenter size" }));
+    expect(h.onTogglePresenter).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Keyboard shortcuts" }));
+    expect(h.onHelp).toHaveBeenCalledTimes(1);
+  });
+  it("offers to leave presenter size when it is on", async () => {
+    barWithHandlers(handlers(), true);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByRole("menuitem", { name: "Normal text size" })).toBeTruthy();
   });
 });

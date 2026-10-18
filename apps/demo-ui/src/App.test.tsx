@@ -61,7 +61,7 @@ describe("App in mock mode", () => {
     await userEvent.click(screen.getByRole("button", { name: /draft mandate/i }));
     expect(await screen.findByText(/^Replaces the current mandate\./)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /approve and sign/i }));
-    expect(await screen.findByText(/signed by the principal/i)).toBeTruthy();
+    expect(await screen.findByText(/signed by your principal key/i)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /start working/i }));
     const list = await screen.findByRole("navigation", { name: "Mandates" });
     expect(within(list).getByText(/retired/i)).toBeTruthy();

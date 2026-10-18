@@ -832,6 +832,14 @@ export class Ledger {
     return m < 0n ? 0n : m;
   }
 
+  /** Sum of every reservation still in the `reserved` state (tasks whose payment has not been committed or released). */
+  reservedTotal(): bigint {
+    const rows = this.db
+      .prepare("SELECT amount FROM reservations WHERE state = 'reserved'")
+      .all() as { amount: string }[];
+    return rows.reduce((s, r) => s + BigInt(r.amount), 0n);
+  }
+
   /** Remaining of a root capability only (what canDerive compares a child against). */
   rootRemaining(rootHash: string): bigint {
     return this.remaining(rootHash);

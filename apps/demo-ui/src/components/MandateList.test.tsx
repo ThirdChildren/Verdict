@@ -28,14 +28,14 @@ const loaded = () => {
 };
 
 describe("mandate list", () => {
-  it("renders one row per mandate, newest first, with the status word and the glyph", () => {
+  it("renders one row per mandate, newest first, with the status word and an icon", () => {
     loaded();
     render(<MandateList />);
     const [b, a] = within(screen.getByRole("navigation", { name: "Mandates" })).getAllByRole(
       "button",
     );
-    expect(b?.textContent).toMatch(/02■ ACTIVE1 task5\.00 · 2\.00\/task/);
-    expect(a?.textContent).toMatch(/01□ RETIRED2 tasks\d\d:\d\d · 5\.00/);
+    expect(b?.textContent).toMatch(/02ACTIVE1 task5\.00 · 2\.00\/task/);
+    expect(a?.textContent).toMatch(/01RETIRED2 tasks\d\d:\d\d · 5\.00/);
     expect(b?.getAttribute("aria-current")).toBe("true");
     expect(a?.getAttribute("aria-current")).toBeNull();
   });

@@ -330,3 +330,58 @@ export async function mineUntilRefund(taskId: string): Promise<void> {
   if (isMock()) return mock.mineUntilRefund(taskId);
   await post(`${engineBase()}/api/demo/mine-until-refund`, { task_id: taskId });
 }
+
+const amountString = z.string().regex(/^\d+(\.\d+)?$/);
+export const fundsSchema = z.object({
+  spendable: amountString,
+  reserved: amountString,
+  available_to_delegate: amountString,
+});
+/** Buyer node's tUSD, as decimal strings computed by the engine (the screen does no sums on them). */
+export type Funds = z.infer<typeof fundsSchema>;
+
+/** The error body of a failed engine read, when it has one. */
+async function failureOf(res: Response, fallback: string): Promise<ApiError> {
+  const j = z
+    .object({ code: z.string().optional(), message: z.string().optional() })
+    .safeParse(await res.json().catch(() => null));
+  return new ApiError(
+    (j.success && j.data.code) || "HTTP_ERROR",
+    (j.success && j.data.message) || fallback,
+  );
+}
+
+/** GET /api/funds. A wallet-less engine answers 503: the panel shows that, never a made-up balance. */
+export async function fetchFunds(): Promise<Funds> {
+  if (isMock()) return mock.fetchFunds();
+  let res: Response;
+  try {
+    res = await fetch(`${engineBase()}/api/funds`);
+  } catch {
+    throw new ApiError("UNREACHABLE", "The engine could not be reached, so the funds are unknown.");
+  }
+  if (!res.ok) throw await failureOf(res, "The engine could not report the funds.");
+  const r = fundsSchema.safeParse(await res.json().catch(() => null));
+  if (!r.success)
+    throw new ApiError("BAD_RESPONSE", "The engine sent funds this screen cannot read.");
+  return r.data;
+}
+
+/** GET /api/principal: the engine asks the principal-signer for its public id. 502 when the signer is down. */
+export async function fetchPrincipal(): Promise<{ id: string }> {
+  if (isMock()) return mock.fetchPrincipal();
+  let res: Response;
+  try {
+    res = await fetch(`${engineBase()}/api/principal`);
+  } catch {
+    throw new ApiError(
+      "UNREACHABLE",
+      "The engine could not be reached, so no principal can be connected.",
+    );
+  }
+  if (!res.ok) throw await failureOf(res, "The principal signer did not answer.");
+  const r = z.object({ id: z.string().min(1) }).safeParse(await res.json().catch(() => null));
+  if (!r.success)
+    throw new ApiError("BAD_RESPONSE", "The engine sent a principal id this screen cannot read.");
+  return { id: r.data.id };
+}

@@ -44,7 +44,7 @@ export function MandateSummary(props: {
             The most the buyer agent may ever do for you. It cannot widen these rules.
           </DialogDescription>
         </DialogHeader>
-        <dl className="grid divide-y divide-rule-soft border-y border-rule">
+        <dl className="grid divide-y divide-rule-soft overflow-hidden  border border-rule-soft bg-card shadow-soft">
           {rows.map(([k, v]) => (
             <div key={k} className="grid grid-cols-[11rem_1fr] items-baseline gap-4 py-2">
               <dt className="text-sm text-subtle uppercase">{k}</dt>
@@ -54,7 +54,7 @@ export function MandateSummary(props: {
         </dl>
         <details>
           <summary className="cursor-pointer text-base">Raw signed mandate (JSON)</summary>
-          <pre className="mt-2 max-h-72 overflow-auto border border-rule p-3 font-mono text-sm">
+          <pre className="mt-2 max-h-72 overflow-auto  border border-rule-soft bg-card p-3 font-mono text-sm">
             {JSON.stringify(r, null, 2)}
           </pre>
         </details>

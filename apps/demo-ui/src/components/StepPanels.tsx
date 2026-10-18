@@ -4,6 +4,7 @@ import { PAYMENT_CAPTIONS, VERDICT_CAPTIONS } from "../lib/captions.js";
 import type { ChainInfo } from "../lib/queries.js";
 import { useEvidence } from "../lib/queries.js";
 import type { TaskView } from "../store.js";
+import { Mark } from "./Mark.js";
 import { BlockRing, Timeline } from "./PaymentTimeline.js";
 import type { Live } from "./WorkerLane.js";
 
@@ -23,7 +24,7 @@ function WorkerOutput({ text }: { text: string }) {
       role="log"
       aria-live="off"
       aria-label="Live model output"
-      className="h-[132px] overflow-y-auto [.presenter_&]:h-16 border border-rule p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
+      className="h-[132px] overflow-y-auto [.presenter_&]:h-16  border border-rule-soft bg-card p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
     >
       {text || "Waiting for the first tokens…"}
     </pre>
@@ -48,7 +49,7 @@ export function WorkPanel(props: { live: Live | null; attempt: number; stopped?:
       </div>
       {props.stopped && (
         <p className="text-xl font-semibold">
-          <span aria-hidden>▲ </span>
+          <Mark kind="attention" className="mr-1" />
           Worker stopped responding
         </p>
       )}
@@ -79,7 +80,7 @@ export function VerifyPanel(props: {
   return (
     <div className="grid gap-4">
       <p aria-live="polite" className="text-4xl font-semibold">
-        <span aria-hidden>■ </span>
+        <Mark kind="done" className="mr-1" />
         {pass ? "PASS" : "FAIL"}
       </p>
       <p className="text-base">{VERDICT_CAPTIONS[v.verdict]}</p>
@@ -87,7 +88,7 @@ export function VerifyPanel(props: {
         {v.checks.length === 0 && <li className="text-subtle">No check ran.</li>}
         {v.checks.map((c) => (
           <li key={c.id} className="font-mono">
-            <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
+            <Mark kind={c.status === "PASS" ? "done" : "fail"} className="mr-1" />
             {c.id}: {c.status === "PASS" ? "passed" : "failed"}
           </li>
         ))}
@@ -123,7 +124,10 @@ function PaidCard(props: {
   const file =
     evidence.data?.task_id === props.taskId ? evidence.data.delivery?.files[0] : undefined;
   return (
-    <div role="status" className="grid gap-1 border-y-2 border-ink py-2">
+    <div
+      role="status"
+      className="animate-soft-in grid gap-1  border border-ok/40 bg-ok/8 px-5 py-3 shadow-soft"
+    >
       <p className="text-xl font-semibold uppercase">
         Paid {task.amount ?? "—"} tUSD to {props.worker}
         {props.verifiedPass ? " · verified PASS" : ""}
@@ -132,7 +136,7 @@ function PaidCard(props: {
       {file && (
         <>
           <p className="text-base">Delivered: {file.path}</p>
-          <pre className="max-h-16 overflow-hidden border border-rule px-3 py-1 [.presenter_&]:max-h-9 font-mono text-base whitespace-pre-wrap">
+          <pre className="max-h-16 overflow-hidden  border border-rule-soft bg-card px-3 py-1 [.presenter_&]:max-h-9 font-mono text-base whitespace-pre-wrap">
             {previewLines(file.content, 2)}
           </pre>
         </>
@@ -146,7 +150,10 @@ function RefundedCard(props: { task: TaskView; verifiedFail: boolean }) {
   const { task } = props;
   const secs = secondsBetween(task.stepAt[0], task.stepAt[4]);
   return (
-    <div role="status" className="border-y-2 border-ink py-2">
+    <div
+      role="status"
+      className="animate-soft-in  border border-rule-soft bg-card px-5 py-3 shadow-soft"
+    >
       <p className="text-xl font-semibold uppercase">
         Refunded {task.amount ?? "—"} tUSD to you
         {props.verifiedFail ? " · verified FAIL" : ""}

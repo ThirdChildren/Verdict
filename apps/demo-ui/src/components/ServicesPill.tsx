@@ -1,3 +1,4 @@
+import { Activity, TriangleAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { WordButton } from "@/components/ui/word-button";
 import type { AppState, ConnStatus, Service } from "../store.js";
@@ -19,25 +20,29 @@ export function ServicesPill(props: { state: AppState; onReconnect: () => void }
   const down = SERVICES.filter((s) => conns[s] === "disconnected");
   const waiting = SERVICES.filter((s) => conns[s] === "connecting");
   const bad = down.length > 0;
-  const glyph = bad ? "▲" : up === SERVICES.length ? "■" : "□";
   const note = bad
     ? `${down.map((s) => LABEL[s]).join(", ")} down`
     : waiting.length > 0
       ? `${waiting.map((s) => LABEL[s]).join(", ")} connecting`
       : null;
+  const Icon = bad ? TriangleAlert : Activity;
   return (
-    <div className="flex shrink-0 items-center gap-3 text-sm">
+    <div className="flex shrink-0 items-center gap-2 text-sm">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               aria-label={`Services ${up} of ${SERVICES.length} connected`}
-              className={`cursor-pointer whitespace-nowrap uppercase outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "font-semibold" : ""}`}
+              className={`inline-flex items-center gap-2  border px-3 py-1.5 whitespace-nowrap shadow-soft outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "border-bad/50 font-semibold text-bad" : "border-rule-soft bg-card"}`}
             >
-              <span aria-hidden>{glyph} </span>
+              <Icon
+                aria-hidden
+                className={`size-4 ${bad ? "" : up === SERVICES.length ? "text-ok" : "text-warn"}`}
+              />
               <span>
-                Services {up}/{SERVICES.length}
+                <span className="hidden min-[1440px]:inline">Services </span>
+                {up}/{SERVICES.length}
               </span>
               {note && <span className="font-semibold"> · {note}</span>}
             </button>
@@ -53,7 +58,11 @@ export function ServicesPill(props: { state: AppState; onReconnect: () => void }
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {bad && <WordButton onClick={props.onReconnect}>Reconnect</WordButton>}
+      {bad && (
+        <WordButton onClick={props.onReconnect} className="normal-case">
+          Reconnect
+        </WordButton>
+      )}
     </div>
   );
 }

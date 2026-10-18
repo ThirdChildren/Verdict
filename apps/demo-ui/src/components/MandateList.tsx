@@ -1,3 +1,4 @@
+import { Archive, ScrollText, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   clockHm,
@@ -10,7 +11,11 @@ import {
 import { mandateOfTask } from "../lib/scope.js";
 import { useStore } from "../store.js";
 
-const GLYPH: Record<MandateStatus, string> = { active: "■", retired: "□", expired: "▲" };
+const ICON: Record<MandateStatus, { Icon: typeof ScrollText; tone: string }> = {
+  active: { Icon: ScrollText, tone: "text-ok" },
+  retired: { Icon: Archive, tone: "text-subtle" },
+  expired: { Icon: TriangleAlert, tone: "text-warn" },
+};
 
 /** Mandates newest first. */
 export const sortedMandates = (m: ReadonlyMap<string, MandateRow>): MandateRow[] =>
@@ -70,32 +75,36 @@ export function MandateList() {
   );
   return (
     <nav aria-label="Mandates">
-      <h2 className="border-b border-ink pb-1 text-xs font-semibold tracking-wide uppercase">
+      <h2 className="px-1 pb-1.5 text-xs font-semibold tracking-wide text-subtle uppercase">
         Mandates
       </h2>
       {rows.length === 0 ? (
         <p className="pt-2 text-sm text-subtle">No mandate yet.</p>
       ) : (
-        <ul className="max-h-[9.75rem] overflow-y-auto">
+        <ul className="grid max-h-[9.75rem] gap-1 overflow-y-auto">
           {rows.map((r) => {
             const st = rowStatus(r, now);
             const isSel = r.hash === selected;
             const n = counts.get(r.hash) ?? 0;
+            const ST = ICON[st];
             return (
-              <li key={r.hash} className="border-b border-rule-soft">
+              <li key={r.hash}>
                 <button
                   type="button"
                   onClick={() => select(r.hash)}
                   aria-current={isSel ? "true" : undefined}
                   title={`Mandate ${String(r.order).padStart(2, "0")}, ${st}`}
-                  className={`grid min-h-[3.25rem] w-full min-w-0 grid-cols-[2.5ch_minmax(0,1fr)] content-center items-baseline gap-x-2 border-l-2 px-2 py-1 text-left outline-none hover:bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${isSel ? "border-ink bg-surface" : "border-transparent"}`}
+                  className={`grid min-h-[3.25rem] w-full min-w-0 grid-cols-[2.5ch_minmax(0,1fr)] content-center items-baseline gap-x-2  border px-3 py-1.5 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${isSel ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
                 >
                   <span className="font-mono text-sm text-subtle">
                     {String(r.order).padStart(2, "0")}
                   </span>
                   <span className="flex flex-wrap items-baseline justify-between gap-x-2">
                     <span className="text-sm font-semibold tracking-wide uppercase">
-                      <span aria-hidden>{GLYPH[st]} </span>
+                      <ST.Icon
+                        aria-hidden
+                        className={`mr-1 inline size-4 align-[-0.15em] ${ST.tone}`}
+                      />
                       {st.toUpperCase()}
                     </span>
                     <span className="font-mono text-xs whitespace-nowrap">{taskWord(n)}</span>

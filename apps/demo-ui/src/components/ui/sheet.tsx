@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { Dialog as SheetPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ function SheetOverlay({
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
-      className={cn("fixed inset-0 z-50 bg-ink/50", className)}
+      className={cn("animate-fade fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm", className)}
       {...props}
     />
   );
@@ -49,21 +50,23 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-paper text-ink",
-          side === "right" && "inset-y-0 right-0 h-full w-full border-l-2 border-ink sm:max-w-md",
-          side === "left" && "inset-y-0 left-0 h-full w-full border-r-2 border-ink sm:max-w-md",
+          "animate-fade fixed z-50 flex flex-col gap-4 bg-card text-ink shadow-lift",
+          side === "right" &&
+            "inset-y-0 right-0 h-full w-full  border-l border-rule-soft sm:max-w-md",
+          side === "left" &&
+            "inset-y-0 left-0 h-full w-full  border-r border-rule-soft sm:max-w-md",
           side === "top" &&
-            "inset-x-0 top-0 max-h-dvh w-full overflow-y-auto border-b-2 border-ink",
+            "inset-x-0 top-0 max-h-dvh w-full overflow-y-auto  border-b border-rule-soft",
           side === "bottom" &&
-            "inset-x-0 bottom-0 max-h-dvh w-full overflow-y-auto border-t-2 border-ink",
+            "inset-x-0 bottom-0 max-h-dvh w-full overflow-y-auto  border-t border-rule-soft",
           className,
         )}
         {...props}
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 text-base font-semibold underline underline-offset-4 outline-none hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-            Close <span aria-hidden>×</span>
+          <SheetPrimitive.Close className="absolute top-4 right-4 inline-flex items-center gap-1.5  px-2.5 py-1.5 text-base font-semibold outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            Close <X aria-hidden className="size-4" />
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

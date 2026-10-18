@@ -4,6 +4,7 @@ import { setStatsOpen } from "../lib/statsPanel.js";
 import { fetchVerifierTasks, type VerifierTaskView } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
 import { Hash } from "./Hash.js";
+import { Mark } from "./Mark.js";
 
 const REASON: Record<string, string> = {
   VERIFY_TIMEOUT: "The check ran out of time, so the delivery counts as failed.",
@@ -54,7 +55,7 @@ export function VerifierLane() {
         {task && !report && "Holding the release secret. Waiting for the worker's delivery."}
         {report && (
           <span className="block text-2xl font-semibold">
-            <span aria-hidden>■ </span>
+            <Mark kind="done" className="mr-1" />
             {pass
               ? "PASS: the delivery passed every check. The secret was released to the worker."
               : "FAIL: the delivery was rejected. The secret stays locked."}
@@ -90,7 +91,7 @@ export function VerifierLane() {
                 <ul className="font-mono text-sm">
                   {report.record.checks.map((c) => (
                     <li key={c.id}>
-                      <span aria-hidden>{c.status === "PASS" ? "■" : "×"} </span>
+                      <Mark kind={c.status === "PASS" ? "done" : "fail"} className="mr-1" />
                       {c.id}: {c.status === "PASS" ? "passed" : "failed"}
                       {c.status === "FAIL" && report.record.verdict === "RELEASE" && (
                         <span className="text-subtle"> advisory</span>
@@ -121,7 +122,7 @@ export function VerifierLane() {
               <Hash value={report.record.verifier_sig} label="verdict signature" />
             </dd>
           </dl>
-          <pre className="mt-3 max-h-40 overflow-auto border border-rule p-3 font-mono text-sm">
+          <pre className="mt-3 max-h-40 overflow-auto  border border-rule-soft bg-card p-3 font-mono text-sm">
             {report.log_tail.join("\n")}
           </pre>
         </>

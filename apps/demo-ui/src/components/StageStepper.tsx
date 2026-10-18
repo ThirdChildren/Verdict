@@ -1,23 +1,24 @@
 import type { StepState, StepView } from "../lib/view.js";
+import { Mark, type MarkKind } from "./Mark.js";
 import { timeOf } from "./PaymentTimeline.js";
 
 interface Look {
   word: string;
-  glyph: string;
+  mark: MarkKind;
   muted: boolean;
 }
 const LOOK: Record<StepState, Look> = {
-  done: { word: "Done", glyph: "■", muted: false },
-  active: { word: "Now", glyph: "▲", muted: false },
-  failed: { word: "Needs attention", glyph: "■", muted: false },
-  skipped: { word: "Skipped", glyph: "–", muted: true },
-  pending: { word: "Waiting", glyph: "□", muted: true },
+  done: { word: "Done", mark: "done", muted: false },
+  active: { word: "Now", mark: "now", muted: false },
+  failed: { word: "Needs attention", mark: "fail", muted: false },
+  skipped: { word: "Skipped", mark: "skip", muted: true },
+  pending: { word: "Waiting", mark: "wait", muted: true },
 };
 
 /** A failed last step is not always an error: a refund is "Returned", an expiry is "Expired". */
 function failedLook(label: string): Look {
-  if (label === "Refunded") return { word: "Returned", glyph: "■", muted: false };
-  if (label === "Expired") return { word: "Expired", glyph: "□", muted: true };
+  if (label === "Refunded") return { word: "Returned", mark: "refund", muted: false };
+  if (label === "Expired") return { word: "Expired", mark: "expired", muted: true };
   return LOOK.failed;
 }
 
@@ -30,29 +31,29 @@ export function StageStepper(props: {
   onShow: (i: number) => void;
 }) {
   return (
-    <ol aria-label="Progress" className="border-y border-rule font-mono text-sm">
+    <ol aria-label="Progress" className="grid gap-1.5 font-mono text-sm">
       {props.steps.map((s, i) => {
         const look =
           s.state === "failed"
             ? s.word === STOPPED_WORD
-              ? { word: STOPPED_WORD, glyph: "▲", muted: false }
+              ? { word: STOPPED_WORD, mark: "attention" as const, muted: false }
               : failedLook(s.label)
             : LOOK[s.state];
         const word = s.word ?? look.word;
         const current = s.state === "active" || s.state === "failed";
         return (
-          <li key={s.id} className="border-b border-rule-soft last:border-b-0">
+          <li key={s.id}>
             <button
               type="button"
               onClick={() => props.onShow(i)}
               aria-current={current ? "step" : undefined}
               aria-pressed={props.shown === i}
-              className={`grid h-8 w-full grid-cols-[2.5ch_12ch_minmax(0,1fr)_auto] items-center gap-x-4 border-l-2 px-2 text-left ${current ? "border-ink" : "border-transparent"} ${props.shown === i ? "bg-surface" : "hover:bg-surface"} ${look.muted ? "text-subtle" : "text-ink"}`}
+              className={`grid h-11 w-full grid-cols-[1.25rem_2.5ch_12ch_minmax(0,1fr)_auto] items-center gap-x-3  border px-3 text-left shadow-soft outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current ? "border-signal/60 bg-card ring-2 ring-signal/15" : "border-rule-soft"} ${props.shown === i ? "bg-surface" : current ? "" : "bg-card/60 hover:bg-card hover:shadow-lift"} ${look.muted ? "text-subtle" : "text-ink"}`}
             >
+              <Mark kind={look.mark} className="size-5" />
               <span>{String(i + 1).padStart(2, "0")}</span>
               <span className="truncate font-semibold uppercase">{s.label}</span>
               <span className="truncate">
-                <span aria-hidden>{look.glyph} </span>
                 <span className={current ? "font-semibold" : ""}>{word}</span>
                 {s.at && <span> · {timeOf(s.at)}</span>}
               </span>

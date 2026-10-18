@@ -4,15 +4,18 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 border border-transparent text-base font-semibold whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex shrink-0 items-center justify-center gap-2  border border-transparent text-base font-semibold whitespace-nowrap outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border-primary bg-primary text-primary-foreground hover:bg-ink hover:border-ink",
-        outline: "border-ink bg-paper text-ink hover:bg-surface",
+        default:
+          "border-primary bg-primary text-primary-foreground shadow-soft hover:-translate-y-px hover:brightness-110 hover:shadow-lift",
+        outline: "border-rule-soft bg-card text-ink shadow-soft hover:border-rule hover:bg-surface",
+        ghost: "text-ink hover:bg-surface",
       },
       size: {
         default: "h-11 px-5 py-2",
+        icon: "size-9 p-0",
       },
     },
     defaultVariants: {

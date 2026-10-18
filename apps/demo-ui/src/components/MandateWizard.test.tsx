@@ -84,7 +84,9 @@ describe("MandateWizard", () => {
     expect(screen.getByText("In 12 hours")).toBeTruthy();
     expect(screen.getByText("data-conversion")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /approve and sign/i }));
-    expect(await screen.findByText(/signed by the principal \(separate process\)/i)).toBeTruthy();
+    expect(
+      await screen.findByText(/signed by your principal key \(WDK, separate process\)/i),
+    ).toBeTruthy();
     expect(calls.filter((c) => c.url.includes("/sign-root"))).toHaveLength(1);
   });
 
@@ -104,7 +106,7 @@ describe("MandateWizard", () => {
     expect((approve as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(screen.getByRole("checkbox"));
     await userEvent.click(approve);
-    expect(await screen.findByText(/signed by the principal/i)).toBeTruthy();
+    expect(await screen.findByText(/signed by your principal key/i)).toBeTruthy();
     const sign = calls.filter((c) => c.url.includes("/sign-root"));
     expect(sign).toHaveLength(2);
     expect(sign[0]?.body.confirm_token).toBeUndefined();
@@ -120,7 +122,7 @@ describe("MandateWizard", () => {
     expect((approve as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(screen.getByRole("checkbox"));
     await userEvent.click(approve);
-    await waitFor(() => expect(screen.getByText(/signed by the principal/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/signed by your principal key/i)).toBeTruthy());
     const sign = calls.filter((c) => c.url.includes("/sign-root"));
     expect(sign[1]?.body.confirm_token).toBe("tok1");
   });

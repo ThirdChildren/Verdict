@@ -31,7 +31,7 @@ async function wizard(p: Page, text: string, stage: 1 | 2): Promise<void> {
   await p.getByRole("button", { name: /approve and sign/i }).waitFor();
   if (stage === 1) return;
   await p.getByRole("button", { name: /approve and sign/i }).click();
-  await p.getByText(/signed by the principal/i).waitFor();
+  await p.getByText(/signed by your principal key/i).waitFor();
 }
 // Extend here (e.g. the demo console) with another { id, scene, act }.
 const EXTRAS: Extra[] = [
@@ -96,8 +96,45 @@ const EXTRAS: Extra[] = [
       await p.getByRole("textbox").fill(EXAMPLE);
       await p.getByRole("button", { name: /draft mandate/i }).click();
       await p.getByRole("button", { name: /approve and sign/i }).click();
-      await p.getByText(/signed by the principal/i).waitFor();
+      await p.getByText(/signed by your principal key/i).waitFor();
       await p.getByRole("button", { name: /start working/i }).click();
+    },
+  },
+  // Principal and funds (U1): disconnected header, connected header + funds panel, mandate review with the ceiling field.
+  { id: "principal-disconnected", scene: "authorized", act: async () => {} },
+  {
+    id: "principal-connected",
+    scene: "authorized",
+    act: async (p) => {
+      await p.getByRole("button", { name: "Connect principal" }).click();
+      await p.getByText("Available to delegate").waitFor();
+    },
+  },
+  {
+    id: "mandate-dialog-funds",
+    scene: "empty",
+    act: async (p) => {
+      await p.getByRole("button", { name: "Connect principal" }).click();
+      await p.getByText("Available to delegate").waitFor();
+      await wizard(p, EXAMPLE, 1);
+      await p.getByText(/^Available to delegate:/).waitFor();
+    },
+  },
+  {
+    id: "mandate-dialog-over",
+    scene: "empty",
+    act: async (p) => {
+      await p.getByRole("button", { name: "Connect principal" }).click();
+      await p.getByText("Available to delegate").waitFor();
+      await wizard(p, EXAMPLE, 1);
+      await p.getByRole("textbox", { name: /spending ceiling/i }).fill("80");
+    },
+  },
+  {
+    id: "more-menu",
+    scene: "authorized",
+    act: async (p) => {
+      await p.getByRole("button", { name: "More" }).click();
     },
   },
   { id: "wizard-signed", scene: "empty", act: (p) => wizard(p, EXAMPLE, 2) },
@@ -139,6 +176,8 @@ async function main(): Promise<void> {
       for (const vp of VIEWPORTS) {
         const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
         await ctx.addInitScript((t) => localStorage.setItem("verdict-theme", t), theme);
+        // Every view starts with the principal disconnected (the app restores a connection made earlier in the session).
+        await ctx.addInitScript(() => sessionStorage.removeItem("verdict.principal"));
         const page = await ctx.newPage();
         const select = async (scene: string) => {
           await page.goto(BASE);

@@ -27,7 +27,7 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
 
 function TooltipContent({
   className,
-  sideOffset = 0,
+  sideOffset = 6,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -37,7 +37,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-fit border border-ink bg-paper px-3 py-1.5 text-sm text-balance text-ink",
+          "animate-fade z-50 w-fit  border border-rule-soft bg-card px-3 py-1.5 text-sm text-balance text-ink shadow-lift",
           className,
         )}
         {...props}
