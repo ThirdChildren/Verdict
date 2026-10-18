@@ -17,7 +17,7 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         align="end"
         className={cn(
-          "animate-fade z-[70] min-w-56 rounded-xl border border-rule-soft bg-card p-1.5 text-ink shadow-lift",
+          "animate-fade z-[70] min-w-56  border border-rule-soft bg-card p-1.5 text-ink shadow-lift",
           className,
         )}
         {...props}
@@ -34,7 +34,7 @@ function DropdownMenuItem({
     <MenuPrimitive.Item
       data-slot="dropdown-menu-item"
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-base outline-none select-none data-[highlighted]:bg-surface [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-subtle",
+        "flex cursor-pointer items-center gap-2.5  px-2.5 py-2 text-base outline-none select-none data-[highlighted]:bg-surface [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-subtle",
         className,
       )}
       {...props}

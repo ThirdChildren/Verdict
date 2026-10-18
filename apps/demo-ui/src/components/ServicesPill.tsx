@@ -34,7 +34,7 @@ export function ServicesPill(props: { state: AppState; onReconnect: () => void }
             <button
               type="button"
               aria-label={`Services ${up} of ${SERVICES.length} connected`}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 whitespace-nowrap shadow-soft outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "border-bad/50 font-semibold text-bad" : "border-rule-soft bg-card"}`}
+              className={`inline-flex items-center gap-2  border px-3 py-1.5 whitespace-nowrap shadow-soft outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${bad ? "border-bad/50 font-semibold text-bad" : "border-rule-soft bg-card"}`}
             >
               <Icon
                 aria-hidden

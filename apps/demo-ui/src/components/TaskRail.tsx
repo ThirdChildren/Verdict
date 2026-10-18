@@ -14,14 +14,14 @@ function Row({ row, selected }: { row: RailRow; selected: boolean }) {
         onClick={() => select(row.key)}
         aria-current={selected ? "true" : undefined}
         title={row.label}
-        className={`grid min-h-16 w-full min-w-0 grid-cols-[3ch_minmax(0,1fr)] content-center items-baseline gap-x-2 gap-y-1 rounded-xl border px-3 py-2 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
+        className={`grid min-h-16 w-full min-w-0 grid-cols-[3ch_minmax(0,1fr)] content-center items-baseline gap-x-2 gap-y-1  border px-3 py-2 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selected ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
       >
         <span className="font-mono text-sm text-subtle">#{row.n}</span>
         <span className="line-clamp-2 text-base leading-snug">{row.label}</span>
         <span className="col-start-2 flex flex-wrap items-baseline gap-x-3">
           <StatusChip chip={row.chip} />
           {row.amount && (
-            <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs whitespace-nowrap">
+            <span className="border border-rule-soft bg-card px-1.5 py-0.5 font-mono text-xs whitespace-nowrap">
               {row.amount} tUSD
             </span>
           )}

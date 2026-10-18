@@ -8,7 +8,7 @@ const LOOK: Record<Chip, { mark: MarkKind; pill: string }> = {
   "Refund pending": { mark: "pending", pill: "bg-warn/12 text-warn" },
   Paid: { mark: "done", pill: "bg-ok/12 text-ok" },
   Refunded: { mark: "refund", pill: "bg-ok/12 text-ok" },
-  Expired: { mark: "expired", pill: "bg-surface text-subtle" },
+  Expired: { mark: "expired", pill: "border border-rule-soft bg-card text-subtle" },
   Blocked: { mark: "blocked", pill: "bg-bad/12 text-bad" },
 };
 
@@ -17,7 +17,7 @@ export function StatusChip({ chip }: { chip: Chip }) {
   const l = LOOK[chip];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap uppercase ${l.pill}`}
+      className={`inline-flex items-center gap-1.5  px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap uppercase ${l.pill}`}
     >
       <Mark kind={l.mark} className="text-current" />
       {chip}

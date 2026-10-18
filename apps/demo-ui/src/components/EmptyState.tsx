@@ -21,13 +21,13 @@ export function EmptyState(props: { onCreate: () => void }) {
   return (
     <section
       aria-label="Welcome"
-      className="animate-soft-in mx-auto max-w-2xl rounded-3xl border border-rule-soft bg-card p-8 shadow-lift"
+      className="animate-soft-in mx-auto max-w-2xl  border border-rule-soft bg-card p-8 shadow-lift"
     >
       <h2 className="text-3xl font-semibold">Give agents permissions, not wallets.</h2>
       <ol className="mt-6 grid gap-3 text-xl">
         {POINTS.map((p, i) => (
-          <li key={p.text} className="flex items-start gap-4 rounded-2xl bg-surface/70 p-4">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-card text-signal shadow-soft">
+          <li key={p.text} className="flex items-start gap-4  bg-card p-4">
+            <span className="grid size-10 shrink-0 place-items-center  bg-card text-signal shadow-soft">
               <p.icon aria-hidden className="size-5" />
             </span>
             <span>

@@ -55,7 +55,7 @@ export function MandatePill(props: {
       type="button"
       onClick={props.onClick}
       title="Show the rules of this mandate (m)"
-      className={`inline-flex shrink-0 items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm whitespace-nowrap shadow-soft outline-none transition hover:bg-surface hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${st === "active" ? "border-rule-soft" : "border-warn/50 font-semibold"}`}
+      className={`inline-flex shrink-0 items-center gap-2  border bg-card px-3 py-1.5 text-sm whitespace-nowrap shadow-soft outline-none transition hover:bg-surface hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${st === "active" ? "border-rule-soft" : "border-warn/50 font-semibold"}`}
     >
       <Icon aria-hidden className={`size-4 ${st === "active" ? "text-ok" : "text-warn"}`} />
       <span className="hidden min-[1440px]:inline">{text}</span>

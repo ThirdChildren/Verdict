@@ -94,7 +94,7 @@ export function MandateList() {
                   onClick={() => select(r.hash)}
                   aria-current={isSel ? "true" : undefined}
                   title={`Mandate ${String(r.order).padStart(2, "0")}, ${st}`}
-                  className={`grid min-h-[3.25rem] w-full min-w-0 grid-cols-[2.5ch_minmax(0,1fr)] content-center items-baseline gap-x-2 rounded-xl border px-3 py-1.5 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${isSel ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
+                  className={`grid min-h-[3.25rem] w-full min-w-0 grid-cols-[2.5ch_minmax(0,1fr)] content-center items-baseline gap-x-2  border px-3 py-1.5 text-left outline-none transition duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${isSel ? "border-signal/60 bg-card shadow-soft ring-2 ring-signal/15" : "border-transparent hover:border-rule-soft hover:bg-card hover:shadow-soft"}`}
                 >
                   <span className="font-mono text-sm text-subtle">
                     {String(r.order).padStart(2, "0")}

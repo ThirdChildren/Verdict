@@ -24,7 +24,7 @@ function WorkerOutput({ text }: { text: string }) {
       role="log"
       aria-live="off"
       aria-label="Live model output"
-      className="h-[132px] overflow-y-auto [.presenter_&]:h-16 rounded-xl border border-rule-soft bg-surface/50 p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
+      className="h-[132px] overflow-y-auto [.presenter_&]:h-16  border border-rule-soft bg-card p-3 font-mono text-base whitespace-pre-wrap [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
     >
       {text || "Waiting for the first tokens…"}
     </pre>
@@ -126,7 +126,7 @@ function PaidCard(props: {
   return (
     <div
       role="status"
-      className="animate-soft-in grid gap-1 rounded-2xl border border-ok/40 bg-ok/8 px-5 py-3 shadow-soft"
+      className="animate-soft-in grid gap-1  border border-ok/40 bg-ok/8 px-5 py-3 shadow-soft"
     >
       <p className="text-xl font-semibold uppercase">
         Paid {task.amount ?? "—"} tUSD to {props.worker}
@@ -136,7 +136,7 @@ function PaidCard(props: {
       {file && (
         <>
           <p className="text-base">Delivered: {file.path}</p>
-          <pre className="max-h-16 overflow-hidden rounded-lg border border-rule-soft bg-surface/50 px-3 py-1 [.presenter_&]:max-h-9 font-mono text-base whitespace-pre-wrap">
+          <pre className="max-h-16 overflow-hidden  border border-rule-soft bg-card px-3 py-1 [.presenter_&]:max-h-9 font-mono text-base whitespace-pre-wrap">
             {previewLines(file.content, 2)}
           </pre>
         </>
@@ -152,7 +152,7 @@ function RefundedCard(props: { task: TaskView; verifiedFail: boolean }) {
   return (
     <div
       role="status"
-      className="animate-soft-in rounded-2xl border border-rule-soft bg-card px-5 py-3 shadow-soft"
+      className="animate-soft-in  border border-rule-soft bg-card px-5 py-3 shadow-soft"
     >
       <p className="text-xl font-semibold uppercase">
         Refunded {task.amount ?? "—"} tUSD to you

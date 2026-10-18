@@ -171,7 +171,6 @@ export function App() {
         onAgents={() => setAgentsOpen(true)}
         {...(shown ? { shown } : {})}
       />
-      <FundsPanel />
       <div className="flex min-h-0 flex-1">
         {state.root && (
           <aside
@@ -190,11 +189,12 @@ export function App() {
         <main
           className={`grid min-w-0 flex-1 gap-6 overflow-auto p-8 [.presenter_&]:py-4 ${state.root ? "content-start" : "place-content-center"}`}
         >
+          <FundsPanel />
           {blockNotice && !onBlockRow && <BlockNotice onDismiss={() => setBlockNotice(false)} />}
           {down && (
             <div
               role="alert"
-              className="animate-soft-in flex items-start gap-3 rounded-2xl border border-bad/40 bg-bad/8 p-4 shadow-soft"
+              className="animate-soft-in flex items-start gap-3  border border-bad/40 bg-bad/8 p-4 shadow-soft"
             >
               <WifiOff aria-hidden className="mt-0.5 size-5 shrink-0 text-bad" />
               <div>
@@ -209,7 +209,7 @@ export function App() {
           {state.root ? (
             <div
               key={state.selected ?? "none"}
-              className="animate-soft-in rounded-3xl border border-rule-soft bg-card/80 p-6 shadow-soft"
+              className="animate-soft-in  border border-rule-soft bg-card/80 p-6 shadow-soft"
             >
               <Stage state={state} live={live} descriptions={descriptions} />
             </div>

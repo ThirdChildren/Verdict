@@ -8,9 +8,9 @@ import { useStore } from "../store.js";
 function Figure(props: { icon: ReactNode; label: string; value: string | null; strong?: boolean }) {
   return (
     <div
-      className={`flex items-center gap-3 rounded-xl border px-3.5 py-2 shadow-soft transition ${props.strong ? "border-signal/40 bg-card ring-2 ring-signal/10" : "border-rule-soft bg-card/70"}`}
+      className={`flex items-center gap-3  border px-3.5 py-2 shadow-soft transition ${props.strong ? "border-signal/40 bg-card ring-2 ring-signal/10" : "border-rule-soft bg-card/70"}`}
     >
-      <span className="grid size-8 place-items-center rounded-lg bg-surface text-subtle [&_svg]:size-4">
+      <span className="grid size-8 place-items-center  bg-bitcoin/15 text-signal [&_svg]:size-4">
         {props.icon}
       </span>
       <div className="grid leading-tight">
@@ -35,7 +35,7 @@ export function FundsPanel() {
     return (
       <div
         role="alert"
-        className="animate-soft-in mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-bad/40 bg-bad/8 px-4 py-2.5 min-[1440px]:mx-6"
+        className="animate-soft-in flex flex-wrap items-center gap-x-4 gap-y-1  border border-bad/40 bg-bad/8 px-4 py-2.5"
       >
         <TriangleAlert aria-hidden className="size-5 text-bad" />
         <p className="font-semibold">{principal.message}</p>
@@ -47,7 +47,7 @@ export function FundsPanel() {
   return (
     <section
       aria-label="Funds"
-      className="animate-soft-in flex flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-3 min-[1440px]:px-6"
+      className="animate-soft-in flex flex-wrap items-center gap-x-4 gap-y-2"
     >
       <h2 className="text-xs font-semibold tracking-wide text-subtle uppercase">
         Regtest test asset (tUSD)

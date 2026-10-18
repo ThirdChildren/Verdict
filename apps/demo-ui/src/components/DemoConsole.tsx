@@ -214,7 +214,7 @@ export function DemoConsole(props: { open: boolean; onClose: () => void }) {
   return (
     <aside
       aria-label="Demo console"
-      className="shrink-0 rounded-t-2xl border-t border-rule-soft bg-card px-8 py-2 shadow-lift"
+      className="shrink-0  border-t border-rule-soft bg-card px-8 py-2 shadow-lift"
     >
       <div className="mb-1 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Demo console</h2>

@@ -41,10 +41,7 @@ export function VerifierLane() {
   const report = task?.reports[task.reports.length - 1];
   const pass = report?.outcome === "PASS";
   return (
-    <section
-      aria-label="Verifier"
-      className="rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
-    >
+    <section aria-label="Verifier" className=" border border-rule-soft bg-card p-4 shadow-soft">
       <h2 className="text-xl font-semibold">Verifier</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
@@ -102,7 +99,7 @@ export function VerifierLane() {
               <Hash value={report.record.verifier_sig} label="verdict signature" />
             </dd>
           </dl>
-          <pre className="mt-3 max-h-40 overflow-auto rounded-lg border border-rule-soft bg-surface/50 p-3 font-mono text-sm">
+          <pre className="mt-3 max-h-40 overflow-auto  border border-rule-soft bg-card p-3 font-mono text-sm">
             {report.log_tail.join("\n")}
           </pre>
         </>

@@ -52,20 +52,20 @@ function SheetContent({
         className={cn(
           "animate-fade fixed z-50 flex flex-col gap-4 bg-card text-ink shadow-lift",
           side === "right" &&
-            "inset-y-0 right-0 h-full w-full rounded-l-3xl border-l border-rule-soft sm:max-w-md",
+            "inset-y-0 right-0 h-full w-full  border-l border-rule-soft sm:max-w-md",
           side === "left" &&
-            "inset-y-0 left-0 h-full w-full rounded-r-3xl border-r border-rule-soft sm:max-w-md",
+            "inset-y-0 left-0 h-full w-full  border-r border-rule-soft sm:max-w-md",
           side === "top" &&
-            "inset-x-0 top-0 max-h-dvh w-full overflow-y-auto rounded-b-3xl border-b border-rule-soft",
+            "inset-x-0 top-0 max-h-dvh w-full overflow-y-auto  border-b border-rule-soft",
           side === "bottom" &&
-            "inset-x-0 bottom-0 max-h-dvh w-full overflow-y-auto rounded-t-3xl border-t border-rule-soft",
+            "inset-x-0 bottom-0 max-h-dvh w-full overflow-y-auto  border-t border-rule-soft",
           className,
         )}
         {...props}
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-base font-semibold outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <SheetPrimitive.Close className="absolute top-4 right-4 inline-flex items-center gap-1.5  px-2.5 py-1.5 text-base font-semibold outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
             Close <X aria-hidden className="size-4" />
           </SheetPrimitive.Close>
         )}

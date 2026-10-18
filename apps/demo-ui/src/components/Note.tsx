@@ -10,7 +10,7 @@ export function Note(props: {
   return (
     <div
       role={props.role ?? "status"}
-      className={`animate-soft-in grid gap-1 rounded-xl border border-rule-soft border-l-4 border-l-ink bg-surface/60 px-4 py-3 ${props.className ?? ""}`}
+      className={`animate-soft-in grid gap-1  border border-rule-soft border-l-4 border-l-ink bg-card px-4 py-3 ${props.className ?? ""}`}
     >
       {props.title && <p className="text-xl font-semibold">{props.title}</p>}
       {props.children}

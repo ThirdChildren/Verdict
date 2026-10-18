@@ -48,7 +48,7 @@ export function StageStepper(props: {
               onClick={() => props.onShow(i)}
               aria-current={current ? "step" : undefined}
               aria-pressed={props.shown === i}
-              className={`grid h-11 w-full grid-cols-[1.25rem_2.5ch_12ch_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl border px-3 text-left shadow-soft outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current ? "border-signal/60 bg-card ring-2 ring-signal/15" : "border-rule-soft"} ${props.shown === i ? "bg-surface" : current ? "" : "bg-card/60 hover:bg-card hover:shadow-lift"} ${look.muted ? "text-subtle" : "text-ink"}`}
+              className={`grid h-11 w-full grid-cols-[1.25rem_2.5ch_12ch_minmax(0,1fr)_auto] items-center gap-x-3  border px-3 text-left shadow-soft outline-none transition duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current ? "border-signal/60 bg-card ring-2 ring-signal/15" : "border-rule-soft"} ${props.shown === i ? "bg-surface" : current ? "" : "bg-card/60 hover:bg-card hover:shadow-lift"} ${look.muted ? "text-subtle" : "text-ink"}`}
             >
               <Mark kind={look.mark} className="size-5" />
               <span>{String(i + 1).padStart(2, "0")}</span>

@@ -82,7 +82,7 @@ export function BudgetMeter({
         </p>
       </TooltipProvider>
       <div
-        className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-rule-soft/70"
+        className="mt-1.5 flex h-1.5 w-full overflow-hidden  bg-rule-soft/70"
         role="img"
         aria-label={
           b

@@ -48,7 +48,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        className="animate-drop-in fixed inset-x-0 top-0 z-50 max-h-dvh overflow-y-auto rounded-b-3xl border-b border-rule-soft bg-card px-6 py-6 text-ink shadow-lift outline-none"
+        className="animate-drop-in fixed inset-x-0 top-0 z-50 max-h-dvh overflow-y-auto  border-b border-rule-soft bg-card px-6 py-6 text-ink shadow-lift outline-none"
         {...props}
       >
         <div className={cn("relative mx-auto grid w-full max-w-3xl gap-4", className)}>
@@ -56,7 +56,7 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute top-0 right-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-base font-semibold outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="absolute top-0 right-0 inline-flex items-center gap-1.5  px-2.5 py-1.5 text-base font-semibold outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               Close <X aria-hidden className="size-4" />
             </DialogPrimitive.Close>

@@ -3,7 +3,7 @@ import { connectPrincipal, principalChip, shortPrincipal } from "../lib/principa
 import { useStore } from "../store.js";
 
 const PILL =
-  "inline-flex shrink-0 items-center gap-2 rounded-full border border-rule-soft bg-card px-3 py-1.5 text-sm whitespace-nowrap shadow-soft transition";
+  "inline-flex shrink-0 items-center gap-2  border border-rule-soft bg-card px-3 py-1.5 text-sm whitespace-nowrap shadow-soft transition";
 
 /** Header control: "Connect principal" until connected, then a chip with the principal's public id. */
 export function PrincipalChip() {

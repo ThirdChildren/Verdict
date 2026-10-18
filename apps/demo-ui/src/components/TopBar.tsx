@@ -53,12 +53,12 @@ export function TopBar(props: {
         <div className="flex shrink-0 items-center gap-2.5">
           <span
             aria-hidden
-            className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-signal to-ink text-paper shadow-soft"
+            className="grid size-9 place-items-center  bg-bitcoin text-ink shadow-soft"
           >
             <ShieldCheck className="size-5" strokeWidth={2} />
           </span>
           <h1 className="text-xl font-semibold tracking-tight">Verdict</h1>
-          <span className="hidden rounded-full bg-surface px-2.5 py-0.5 font-mono text-xs whitespace-nowrap text-subtle min-[1440px]:inline [.presenter_&]:hidden">
+          <span className="hidden border border-rule-soft bg-card px-2.5 py-0.5 font-mono text-xs whitespace-nowrap text-subtle min-[1440px]:inline [.presenter_&]:hidden">
             regtest · tUSD
           </span>
         </div>
@@ -119,7 +119,7 @@ export function TopBar(props: {
               <button
                 type="button"
                 aria-label="More"
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-[state=open]:bg-surface"
+                className="inline-flex size-9 shrink-0 items-center justify-center  outline-none transition hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-[state=open]:bg-surface"
               >
                 <Ellipsis aria-hidden className="size-[1.15rem]" strokeWidth={1.75} />
               </button>

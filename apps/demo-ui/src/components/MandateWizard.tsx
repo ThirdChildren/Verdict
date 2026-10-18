@@ -214,7 +214,7 @@ function ReviewStep(props: {
         perTask={proposal.mandate.max_per_task}
         available={connected ? (funds.data?.available_to_delegate ?? null) : null}
       />
-      <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-rule-soft bg-card shadow-soft [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
+      <dl className="grid grid-cols-2 overflow-hidden  border border-rule-soft bg-card shadow-soft [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-rule-soft">
         <Fact
           label="Spending ceiling"
           big={`${m.max_total} tUSD`}
@@ -257,7 +257,7 @@ function ReviewStep(props: {
       )}
       <details>
         <summary className="cursor-pointer text-base">Raw mandate (JSON)</summary>
-        <pre className="mt-2 max-h-56 overflow-auto rounded-lg border border-rule-soft bg-surface/50 p-3 font-mono text-sm">
+        <pre className="mt-2 max-h-56 overflow-auto  border border-rule-soft bg-card p-3 font-mono text-sm">
           {JSON.stringify(m, null, 2)}
         </pre>
       </details>

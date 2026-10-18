@@ -169,10 +169,7 @@ export function WorkerLane() {
   const live = useLiveStream();
   const last = task?.attempts?.[task.attempts.length - 1];
   return (
-    <section
-      aria-label="Worker"
-      className="rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
-    >
+    <section aria-label="Worker" className=" border border-rule-soft bg-card p-4 shadow-soft">
       <h2 className="text-xl font-semibold">Worker</h2>
       <p aria-live="polite" className="mt-2">
         {!task && "Waiting for a task."}
@@ -205,7 +202,7 @@ export function WorkerLane() {
       )}
       {live && (
         <section
-          className="mt-3 rounded-xl border border-rule-soft bg-surface/50 p-3"
+          className="mt-3  border border-rule-soft bg-card p-3"
           aria-label="Live model output"
         >
           <p className="font-mono text-base font-semibold">
@@ -246,7 +243,7 @@ export function WorkerLane() {
       <label className="mt-3 flex items-center gap-3 text-base font-semibold">
         <input
           type="checkbox"
-          className="size-5 accent-ink"
+          className="size-5 accent-bitcoin"
           checked={config?.sabotaged ?? false}
           disabled={config === null}
           onChange={(e) => void toggle({ sabotaged: e.target.checked })}
@@ -257,7 +254,7 @@ export function WorkerLane() {
         <label className="mt-2 flex items-center gap-3 text-base font-semibold">
           <input
             type="checkbox"
-            className="size-5 accent-ink"
+            className="size-5 accent-bitcoin"
             checked={config.disappears}
             onChange={(e) => void toggle({ disappears: e.target.checked })}
           />

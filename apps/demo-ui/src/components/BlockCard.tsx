@@ -14,7 +14,7 @@ export function BlockCard(props: {
     <div
       role="alert"
       aria-label={`Blocked: ${BLOCK_TITLES[props.code]}`}
-      className="grid gap-2 rounded-2xl border border-bad/40 border-l-4 border-l-bad bg-card px-5 py-4 shadow-soft"
+      className="grid gap-2  border border-bad/40 border-l-4 border-l-bad bg-card px-5 py-4 shadow-soft"
     >
       <p className="text-xl font-semibold">BLOCKED: {BLOCK_TITLES[props.code]}</p>
       <p className="text-base">{props.message.replace(REASSURANCE_DUP, "")}</p>

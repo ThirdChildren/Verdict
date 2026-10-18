@@ -1,7 +1,7 @@
 import { Hash, middle } from "./Hash.js";
 import { Mark } from "./Mark.js";
 
-/** Shows a hash next to a result recomputed in the browser: matches -> verified (blue), differs -> MISMATCH (amber). */
+/** Shows a hash next to a result recomputed in the browser: matches -> verified (green check), differs -> MISMATCH (amber). */
 export function HashCheck({
   label,
   shown,

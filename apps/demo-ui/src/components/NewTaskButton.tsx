@@ -200,7 +200,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
             {failure && (
               <p
                 role="alert"
-                className="rounded-xl border border-rule-soft border-l-4 border-l-bad bg-surface/60 px-4 py-2 font-semibold"
+                className=" border border-rule-soft border-l-4 border-l-bad bg-card px-4 py-2 font-semibold"
               >
                 {failure}
               </p>

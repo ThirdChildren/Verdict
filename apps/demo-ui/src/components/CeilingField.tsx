@@ -26,7 +26,7 @@ export function CeilingField(props: {
   const presets = presetsFor(props.perTask, props.precision);
   return (
     <div
-      className="grid gap-3 rounded-2xl border border-rule-soft bg-card p-4 shadow-soft"
+      className="grid gap-3  border border-rule-soft bg-card p-4 shadow-soft"
       data-testid="ceiling-field"
     >
       <Label htmlFor={id} className="text-sm text-subtle uppercase">
@@ -50,7 +50,7 @@ export function CeilingField(props: {
           value={bounds.position(minor)}
           disabled={bounds.max === 0}
           onChange={(e) => props.onChange(fromMinor(BigInt(e.target.value), props.precision))}
-          className="min-w-48 flex-1 accent-ink"
+          className="min-w-48 flex-1 accent-bitcoin"
         />
       </div>
       {props.available !== null && (
