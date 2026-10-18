@@ -327,6 +327,10 @@ A format-2 package keeps the six format-1 fields and adds a list of checks and t
 - **Evidence, not protocol:** score, profile, per-check results, duration, determinism and self-check agreement live in the verifier's run report (`GET /v0/verdicts/:task_id`) and in `GET /v0/stats`; the signed Verdict Record stays at protocol 0.1.3 and still only says RELEASE or WITHHOLD.
 - **Worker side:** a format-2 package drives the worker prompt from its manifest (description, entry, visible cases, rules); hidden cases are never read.
 
+### 9.2 Custom packages authored from a request
+
+A request that matches no package can get its own. The buyer's local model answers one constrained call with a draft acceptance test: feasibility (`cli`, `reframe` for games and interfaces, `none` for work no deterministic test can decide), title, description, entry file name, input type, three visible and five to eight hidden input/expected pairs, and rules in the judge's closed vocabulary. The principal reviews and edits the draft in the New task dialog. The engine validates it strictly (names, sizes, no duplicate inputs, no constant outputs, at least half of the hidden cases must change their input, so a copy program is not payable), writes `verifier-packages/custom-<slug>-<draft8>/` atomically with the manifest, cases, visible cases, rules, README and the allow-listed judge copied byte-identical, hashes it, adds it to its catalogue and confirms the verifier lists the hash; the verifier and the worker adopt new packages by a debounced rescan on an unknown hash, with the allow-list and the directory-hash check unchanged. The task then carries that hash in its contract and the usual flow runs. The model writes the test before signing; the verdict stays deterministic. Limits: single-machine topology (the three services share the packages root); custom packages are not committed.
+
 ## 10. QVAC usage
 
 | Where | Model (initial choice, confirm in spike) | Output |
