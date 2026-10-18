@@ -17,13 +17,15 @@ trailing newline. Format-2 package: entry `normalise.mjs`, judged by the generic
 | limits (20000 bytes, 300 lines) | limits | 5 | no |
 | spec (`spec/assertions.json`) | spec | 10 | yes |
 
+Passing every required check but failing visible, idempotent and limits scores 75, below the standard min of 80, so it is FAIL.
+
 Profiles: `strict` (min 95, visible and idempotent required, full determinism), `standard` (min 80), `lenient`
 (min 60, schema not required, whitespace collapsed). Pick one with `profile` in `manifest.json`.
 
 ## Limits of the judge here
 
 Fixtures and visible use `compare: "text"` with `whitespace: "trim-lines"`: output must match the expected text
-exactly (key order, number spelling, indentation) apart from trailing spaces on lines; profile tolerances do not apply
+exactly (key order, number spelling, indentation) apart from trailing spaces on lines and the number of trailing newlines; profile tolerances do not apply
 in text mode. Judge sha256 `5587078593b9ef1d31324cf9ac7e6295d168958c4629f3d08dfb896ad55d8933`. `spec` forbids `NaN`, `Infinity`, `undefined` and caps output size.
 `schema` cannot express "object or array", so it requires an object. Avoid integer-like keys in new cases (parsing
 re-orders them).

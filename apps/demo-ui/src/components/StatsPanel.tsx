@@ -12,7 +12,7 @@ import { glyphBar, pct, seconds } from "../lib/statsView.js";
 import { fetchVerifierStats, type PackageStats } from "../lib/verifierApi.js";
 
 export const STATS_CAPTION =
-  "Every run of every test package on this verifier: how often deliveries pass, how consistent the verdicts are, and how well workers predict them.";
+  "Every run of every test package on this verifier: how often deliveries pass, how consistent the verdicts are, and how well workers predict them. Score and determinism are measured for format-2 packages only.";
 
 const Fig = (p: { label: string; value: string }) => (
   <span className="whitespace-nowrap">

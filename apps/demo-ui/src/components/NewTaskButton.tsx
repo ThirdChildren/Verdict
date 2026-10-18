@@ -173,6 +173,10 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                   {errors.description.message}
                 </p>
               )}
+              <p className="text-base text-subtle">
+                Today the worker can only convert CSV files to JSON; any other job fails the test
+                and is refunded.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor={`${id}-a`} className="text-lg font-semibold">

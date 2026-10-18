@@ -35,7 +35,7 @@ export async function fetchVerifierStats(): Promise<PackageStats[]> {
         checks: [
           { id: "tests", runs: 12, fail_rate: 0.25 },
           { id: "schema", runs: 12, fail_rate: 0.08 },
-          { id: "limits", runs: 12, fail_rate: 0 },
+          { id: "no-network", runs: 12, fail_rate: 0 },
         ],
         withhold_codes: { VERIFY_TIMEOUT: 1 },
       },
@@ -72,7 +72,7 @@ export async function fetchEvidence(taskId: string): Promise<Evidence> {
     {
       path: "out.json",
       content:
-        '[\n  {"name": "Ada", "age": 36},\n  {"name": "Grace", "age": 45},\n  {"name": "Linus", "age": 28}\n]',
+        '[\n  {"name": "Ada", "age": "36"},\n  {"name": "Grace", "age": "45"},\n  {"name": "Linus", "age": "28"}\n]',
     },
   ];
   const dh = dirHash(
@@ -84,7 +84,7 @@ export async function fetchEvidence(taskId: string): Promise<Evidence> {
     delivery_sha256: dh,
     verifier_package_sha256: "3".repeat(64),
     attempt: 1,
-    checks: [{ id: "parses-header", status: "PASS" }],
+    checks: [{ id: "tests", status: "PASS" }],
     exit_code: 0,
     verdict: "RELEASE",
     payment_hash: "f".repeat(64),

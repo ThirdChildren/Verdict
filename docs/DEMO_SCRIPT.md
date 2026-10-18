@@ -40,7 +40,7 @@ Preferred: the demo console's *Mine until refund* (needs the engine started with
 
 | Symptom | Do |
 |---|---|
-| Worker is slow (model thinking) | Presenter narrates the worker lane: attempts 1/3 to 3/3, self-check through the same `verify.sh`, live tokens. Do not click anything. A slow run once seen (about 7 tok/s) did not reproduce; see `docs/SETUP.md`. |
+| Worker is slow (model thinking) | Presenter narrates the worker lane: attempts 1/3 to 3/3, self-check through the same sandboxed runner and package, live tokens. Do not click anything. A slow run once seen (about 7 tok/s) did not reproduce; see `docs/SETUP.md`. |
 | Stall alert in the worker lane ("waiting for the payment ...") | The channel is not locking funds. Say it plainly, then `pnpm demo:reset` (about 60 s) and re-sign the mandate. Use the reset time to tell the problem and architecture story again. Do not restart a daemon. |
 | Verifier on the Mac is down (plan B) | `docs/DEMO_TOPOLOGY.md`, "2-minute fallback", then continue on one machine. |
 | `/api/chain` 503 during the disappearing task | The counter disappears; the payment still fails at expiry. Say "the counter needs our bitcoind connection, the expiry does not". |

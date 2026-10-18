@@ -115,7 +115,7 @@ Verifier on a second machine (macOS or Linux, no wallet, no model): `docs/MAC_VE
 ## What is mocked, simulated or hard-coded
 
 - Nothing in the demo path: every payment is a real RGB tUSD HODL invoice over Lightning on local regtest. `FakeWallet` and `FakeLlm` exist for unit tests only and throw under `VERDICT_MODE=demo`.
-- Hard-coded by design for the MVP: one task type (CSV to JSON) with one verifier package written by us; one preconfigured worker; one trusted verifier named in the signed contract; regtest only, test dollars with no value.
+- Hard-coded by design for the MVP: one task type (CSV to JSON) with one verifier package written by us (a second package, json-normalise-v1, exists and runs under `pnpm verifier:rerun`; the live demo still uses csv2json-v1); one preconfigured worker; one trusted verifier named in the signed contract; regtest only, test dollars with no value.
 - The UI has a `?mock=1` storyboard mode for development only, with a visible "MOCK DATA" banner.
 
 ## RGB, QVAC and WDK usage

@@ -56,7 +56,7 @@ const SAMPLE_LIVE: Live = {
   key: `${TASK}:1`,
   attempt: 1,
   thinking: "",
-  output: '[\n  {"name": "Ada", "age": 36},\n  {"name": "Grace", "age": 45}\n',
+  output: '[\n  {"name": "Ada", "age": "36"},\n  {"name": "Grace", "age": "45"}\n',
   tokens: 184,
   tps: 41.7,
   done: false,

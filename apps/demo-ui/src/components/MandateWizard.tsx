@@ -93,6 +93,7 @@ function WriteStep(props: { onProposed: (goal: string, data: GoalResponse) => vo
         </p>
       )}
       <div className="grid justify-items-start gap-1">
+        <p className="text-base">The worker can do one kind of job today: CSV files to JSON.</p>
         <span className="text-sm text-subtle uppercase">Try an example</span>
         {EXAMPLES.map((ex) => (
           <button

@@ -208,6 +208,11 @@ function Buyer(props: {
             </>
           ) : undefined}
         </Row>
+        <Row label="Mandate reasoning">
+          {buyer.mandateThinking ? (
+            <span className="block whitespace-pre-wrap">{buyer.mandateThinking}</span>
+          ) : undefined}
+        </Row>
         <Row label="Engine answer">
           {block ? (
             <span className="block">
@@ -313,7 +318,7 @@ function Worker(props: { sel: Sel; data: AgentsData; s: AppState }) {
 function Verifier(props: { sel: Sel; data: AgentsData; s: AppState }) {
   const { sel, data, s } = props;
   const caption =
-    "The verifier, on a separate machine, runs a fixed test on the file. No AI decides. It signs PASS or FAIL.";
+    "The verifier, in its own process (optionally on a separate machine), runs a fixed test on the file. No AI decides. It signs PASS or FAIL.";
   if (sel.kind !== "task")
     return (
       <Section id="agents-verifier" title="Verifier" caption={caption}>

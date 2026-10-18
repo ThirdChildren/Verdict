@@ -34,13 +34,17 @@ const decisionData = z
       .optional(),
   })
   .passthrough();
-const proposedData = z.object({ goal: optText, thinking: optText }).passthrough();
+const proposedData = z
+  .object({ goal: optText, thinking: optText, intent_sha256: optText })
+  .passthrough();
 
 export interface BuyerFacts {
   /** The goal text given to the mandate proposal (needs buyer field `mandate.proposed.goal`). */
   mandateGoal: string | null;
   /** Model reasoning collected after the call (needs `thinking` on `mandate.proposed` / `intent.proposed`). */
   thinking: string | null;
+  /** Reasoning the model gave when it proposed the mandate (`mandate.proposed.thinking`). */
+  mandateThinking: string | null;
   /** The buyer's record of the engine's answer to this task's spend intent (needs `intent_sha256` on both sides). */
   decision: { status: string; code: string | null; message: string | null } | null;
   /** Time on the buyer service's own clock for that decision. */
@@ -49,12 +53,24 @@ export interface BuyerFacts {
 
 /** Joins the buyer ring to a task by `intent_sha256`. Without the hash nothing is guessed: fields stay null. */
 export function buyerFacts(events: readonly BuyerEvent[], intentSha: string | null): BuyerFacts {
-  const out: BuyerFacts = { mandateGoal: null, thinking: null, decision: null, decisionAt: null };
+  const out: BuyerFacts = {
+    mandateGoal: null,
+    thinking: null,
+    mandateThinking: null,
+    decision: null,
+    decisionAt: null,
+  };
   for (const e of events) {
     if (e.type === "mandate.proposed") {
       const p = proposedData.safeParse(e.data);
       if (p.success) {
         out.mandateGoal = p.data.goal ?? out.mandateGoal;
+        out.mandateThinking = p.data.thinking ?? out.mandateThinking;
+      }
+    }
+    if (e.type === "intent.proposed" && intentSha) {
+      const p = proposedData.safeParse(e.data);
+      if (p.success && p.data.intent_sha256 === intentSha) {
         out.thinking = p.data.thinking ?? out.thinking;
       }
     }

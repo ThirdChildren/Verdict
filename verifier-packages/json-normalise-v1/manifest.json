@@ -1,7 +1,7 @@
 {
   "format": 2,
   "id": "json-normalise-v1",
-  "description": "Write a Node.js program (ES module, built-ins only) that reads one JSON file whose path is argv[2] and prints its canonical form to stdout. Canonical means: object keys sorted recursively in plain code-unit order (so \"B\" comes before \"a\"), arrays kept in input order, strings unchanged, numbers printed in plain decimal (no exponent, no trailing zeros, -0 printed as 0), 2-space indentation, and exactly one trailing newline.",
+  "description": "Write a Node.js program (ES module, built-ins only) that reads one JSON file whose path is argv[2] and prints its canonical form to stdout. Canonical means: object keys sorted recursively in plain code-unit order (so \"B\" comes before \"a\"), arrays kept in input order, strings unchanged, numbers printed in plain decimal (no exponent, no trailing zeros, -0 printed as 0), 2-space indentation, and a trailing newline.",
   "profile": "standard",
   "entry": "normalise.mjs",
   "cases_dir": "cases",
