@@ -3,7 +3,12 @@ import { z } from "zod";
 import * as mock from "../mock/api.js";
 import { type MandateRow, parseMandates, parseTaskRoots } from "./mandates.js";
 import { isMock } from "./mode.js";
-import { DEFAULT_TASK_TYPES, parseTaskTypes, type TaskType } from "./taskTypes.js";
+import {
+  DEFAULT_TASK_TYPES,
+  parseTaskTypes,
+  parseVerifierInfo,
+  type TaskTypeCatalogue,
+} from "./taskTypes.js";
 import { fetchWorkerDelivery } from "./workerApi.js";
 
 const host = (envPort: string | undefined, def: string, param: string): string => {
@@ -11,7 +16,7 @@ const host = (envPort: string | undefined, def: string, param: string): string =
   const env = import.meta.env;
   return q ?? `${env.VITE_ENGINE_HOST ?? location.hostname}:${envPort ?? def}`;
 };
-const engineBase = () =>
+export const engineBase = () =>
   `${location.protocol}//${host(import.meta.env.VITE_ENGINE_PORT, "7401", "engine")}`;
 // The signer only listens on loopback, so the console must run on the same machine.
 const signerBase = () =>
@@ -237,20 +242,21 @@ export async function routeRequest(
 }
 
 /** Task types the verifier can check. 404 (older engine): the one package that always existed. */
-export async function fetchTaskTypes(): Promise<TaskType[]> {
-  if (isMock()) return mock.fetchTaskTypes();
+export async function fetchTaskTypes(): Promise<TaskTypeCatalogue> {
+  if (isMock()) return { types: await mock.fetchTaskTypes() };
   let res: Response;
   try {
     res = await fetch(`${engineBase()}/api/task-types`);
   } catch {
     throw new ApiError("UNREACHABLE", "The engine could not be reached.");
   }
-  if (res.status === 404) return DEFAULT_TASK_TYPES;
+  if (res.status === 404) return { types: DEFAULT_TASK_TYPES };
   if (!res.ok) throw new ApiError("HTTP_ERROR", `The engine answered with status ${res.status}.`);
-  const list = parseTaskTypes(await res.json().catch(() => null));
+  const raw: unknown = await res.json().catch(() => null);
+  const list = parseTaskTypes(raw);
   if (!list)
     throw new ApiError("BAD_RESPONSE", "The engine sent a task-type list this screen cannot read.");
-  return list;
+  return { types: list, ...parseVerifierInfo(raw) };
 }
 
 /** Sends the goal of a new task to the buyer agent, under the already signed mandate. */

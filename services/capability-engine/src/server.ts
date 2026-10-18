@@ -26,7 +26,7 @@ import { type DemoRouteDeps, registerDemoToggleRoutes } from "./api/demo.js";
 import { registerEvidenceRoutes } from "./api/evidence.js";
 import { registerFundsRoutes } from "./api/funds.js";
 import { type EngineIdentities, registerMandateRoutes } from "./api/mandate.js";
-import type { Catalogue } from "./catalogue.js";
+import { type Catalogue, hostOnly, makeVerifierProbe } from "./catalogue.js";
 import { type HardLimits, hardLimits } from "./config.js";
 import { Escrow } from "./escrow.js";
 import { type EngineEvent, EventBus } from "./events.js";
@@ -75,6 +75,8 @@ export interface ServerOptions {
   taskTtlMs?: number;
   /** Verifiable task types (verifier-packages/*). Enables GET /api/task-types and the refusal in POST /api/mandate/task. */
   catalogue?: Catalogue;
+  /** Verifier base URL, reported (host only) and probed by GET /api/task-types. */
+  verifierUrl?: string;
   /** Demo console: the "mine until refund" route exists only when `enabled` (VERDICT_DEMO_TOGGLES=1). */
   demo?: { enabled: boolean; mine: DemoRouteDeps["mine"]; pauseMs?: number };
 }
@@ -124,7 +126,26 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       ...(opts.catalogue ? { catalogue: opts.catalogue } : {}),
     });
   const cat = opts.catalogue;
-  if (cat) app.get("/api/task-types", async () => ({ ok: true, types: cat.view() }));
+  /**
+   * GET /api/task-types ->
+   * { ok: true, types: [{ id, description, format, package_sha256 }],
+   *   verifier_reachable: boolean,   // /v0/packages answered within 2 s (cached 10 s)
+   *   verifier_url: string | null }  // host[:port] only, no scheme, credentials or path
+   */
+  if (cat) {
+    const probe = makeVerifierProbe(opts.verifierUrl, opts.verifierFetch);
+    const verifierHost = opts.verifierUrl ? hostOnly(opts.verifierUrl) : null;
+    app.get("/api/task-types", async () => {
+      const reachable = await probe();
+      if (reachable) await cat.ensureVerified();
+      return {
+        ok: true,
+        types: cat.view(),
+        verifier_reachable: reachable,
+        verifier_url: verifierHost,
+      };
+    });
+  }
   if (opts.ledger)
     registerEvidenceRoutes(app, {
       ledger: opts.ledger,

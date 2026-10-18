@@ -38,6 +38,39 @@ export function parseTaskTypes(raw: unknown): TaskType[] | null {
     : null;
 }
 
+/** The catalogue plus what the engine says about its verifier; both verifier fields may be absent (older engine). */
+export interface TaskTypeCatalogue {
+  types: TaskType[];
+  verifierReachable?: boolean;
+  verifierUrl?: string;
+}
+
+/** Reads `verifier_reachable` and `verifier_url` from a task-types answer; absent or mistyped fields are left out. */
+export function parseVerifierInfo(raw: unknown): {
+  verifierReachable?: boolean;
+  verifierUrl?: string;
+} {
+  if (typeof raw !== "object" || raw === null) return {};
+  const o = raw as Record<string, unknown>;
+  return {
+    ...(typeof o.verifier_reachable === "boolean"
+      ? { verifierReachable: o.verifier_reachable }
+      : {}),
+    ...(typeof o.verifier_url === "string" && o.verifier_url !== ""
+      ? { verifierUrl: o.verifier_url }
+      : {}),
+  };
+}
+
+/** Host part of a verifier URL for display; the raw text when it is not a URL. */
+export function verifierHost(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
 /** A refusal code the engine or the buyer agent sends when a request cannot be verified. */
 export const isUnverifiable = (code: string): boolean =>
   code === "TASK_NOT_VERIFIABLE" || code === "TASK_TYPE_UNVERIFIABLE";

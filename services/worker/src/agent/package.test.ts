@@ -115,3 +115,28 @@ describe("hints", () => {
     expect(hintFor("other-v1", "weird")).toBe(FALLBACK_HINT);
   });
 });
+
+describe("default packages root", () => {
+  it("is the repo root catalogue regardless of cwd", async () => {
+    const { mkdtempSync, existsSync: ex } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join: j } = await import("node:path");
+    const { DEFAULT_PACKAGES_ROOT, packagesRoot, packageMap: pm } = await import("./package.js");
+    const prev = process.cwd();
+    const saved = process.env.VERIFIER_PACKAGES_ROOT;
+    delete process.env.VERIFIER_PACKAGES_ROOT;
+    process.chdir(mkdtempSync(j(tmpdir(), "vp-")));
+    try {
+      expect(packagesRoot()).toBe(DEFAULT_PACKAGES_ROOT);
+      expect(ex(j(DEFAULT_PACKAGES_ROOT, "csv2json-v1"))).toBe(true);
+      const map = await pm(packagesRoot());
+      const names = [...map.values()].map((d) => d.split("/").pop());
+      expect(names).toContain("csv2json-v1");
+      expect(names).toContain("json-normalise-v1");
+      for (const h of map.keys()) expect(await resolvePackageDir(h)).not.toBeNull();
+    } finally {
+      process.chdir(prev);
+      if (saved !== undefined) process.env.VERIFIER_PACKAGES_ROOT = saved;
+    }
+  });
+});

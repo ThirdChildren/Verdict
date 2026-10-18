@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "../lib/api.js";
+import { ApiError, engineBase } from "../lib/api.js";
 import { readOnlyReason } from "../lib/mandates.js";
 import { fromMinor, toMinor } from "../lib/money.js";
 import { useRouteRequest, useStartTask, useTaskTypes } from "../lib/queries.js";
@@ -24,7 +24,7 @@ import {
   DEFAULT_TASK_DESCRIPTION,
   defaultTaskAmount,
 } from "../lib/taskText.js";
-import { isUnverifiable, type TaskType } from "../lib/taskTypes.js";
+import { isUnverifiable, type TaskType, verifierHost } from "../lib/taskTypes.js";
 import { useStore } from "../store.js";
 import { Mark } from "./Mark.js";
 
@@ -93,7 +93,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const route = useRouteRequest();
   const resetRoute = route.reset;
   const [mapped, setMapped] = useState<{ id: string; reason: string } | null>(null);
-  const list: TaskType[] = types.data ?? [];
+  const list: TaskType[] = types.data?.types ?? [];
   // Default: the first listed type, until the user picks another.
   const selectedType = list.find((t) => t.id === chosen)?.id ?? list[0]?.id ?? null;
   const { reset } = form;
@@ -196,11 +196,12 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 <p role="status">Loading the task types the verifier can check...</p>
               ) : types.isError ? (
                 <p role="alert" className="font-semibold">
-                  The task types could not be loaded. Nothing can be sent until they are.
+                  Cannot reach the engine at {engineBase()}. Is it running?
                 </p>
               ) : list.length === 0 ? (
                 <p role="alert" className="font-semibold">
-                  The verifier is not reachable, so no task type can be offered.
+                  The engine offers no task type. Its package catalogue is empty: check
+                  VERIFIER_PACKAGES_ROOT on the engine.
                 </p>
               ) : (
                 <ul className="divide-y divide-rule-soft border-y border-rule-soft">
@@ -222,6 +223,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                     </li>
                   ))}
                 </ul>
+              )}
+              {list.length > 0 && types.data?.verifierReachable !== undefined && (
+                <p className="text-base text-subtle">
+                  {types.data.verifierReachable
+                    ? `Verifier: reachable at ${verifierHost(types.data.verifierUrl ?? "the configured address")}`
+                    : "Verifier: not reachable from the engine; tasks will be refused at deposit"}
+                </p>
               )}
               {mapped && (
                 <p role="status" className="text-base font-semibold">

@@ -11,7 +11,13 @@ import {
   registerWdkEip191Verifier,
   WalletClient,
 } from "@verdict/wallet";
-import { Catalogue, intersectWithVerifier, packagesRoot, scanCatalogue } from "./catalogue.js";
+import {
+  Catalogue,
+  intersectWithVerifier,
+  logCatalogue,
+  packagesRoot,
+  scanCatalogue,
+} from "./catalogue.js";
 import { bitcoindHeight, resolveBitcoindRpc } from "./chain.js";
 import { hardLimits } from "./config.js";
 import { contractLimits } from "./contract-config.js";
@@ -43,7 +49,7 @@ try {
   const { entries: found, scanned } = await scanCatalogue(root);
   const verifierUrl = peers.verifier;
   const meet = await intersectWithVerifier(found, verifierUrl);
-  console.log(`task types: ${meet.entries.map((e) => e.id).join(", ") || "none"}`);
+  logCatalogue(root, meet.entries);
   if (!meet.filtered)
     console.warn(
       `WARNING: the verifier at ${verifierUrl} gave no package list; all local task types are kept and will be re-checked at the first offer.`,
@@ -64,6 +70,7 @@ try {
     ledger,
     localOnly,
     catalogue,
+    verifierUrl,
     chainHeight: bitcoindHeight(resolveBitcoindRpc(process.env, loadNetwork(dir))),
     identities,
     ...(walletOn

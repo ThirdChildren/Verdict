@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEd25519Signer, offeredContractSchema, spendIntentSchema } from "@verdict/protocol";
 import { dirHashFromDisk } from "@verdict/protocol/node";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { Catalogue, intersectWithVerifier, loadCatalogue, scanCatalogue } from "./catalogue.js";
 import { EventBus } from "./events.js";
 import { Ledger } from "./ledger/index.js";
@@ -173,4 +173,76 @@ test("a failed startup intersection is retried at the first offer", async () => 
   expect(cat.entries.map((e) => e.id)).toEqual(["json-normalise-v1"]);
   await cat.ensureVerified();
   expect(calls).toBe(2);
+});
+
+describe("catalogue root and verifier probe", () => {
+  test("default root is the repository verifier-packages whatever the cwd", async () => {
+    const { packagesRoot } = await import("./catalogue.js");
+    const { mkdtempSync, realpathSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join, resolve } = await import("node:path");
+    const before = process.cwd();
+    const expected = resolve(before, "../..", "verifier-packages");
+    const a = packagesRoot({});
+    process.chdir(realpathSync(mkdtempSync(join(tmpdir(), "cwd-"))));
+    try {
+      expect(packagesRoot({})).toBe(a);
+      expect(a.endsWith("/verifier-packages")).toBe(true);
+      expect(a).toBe(resolve(a));
+      if (before.endsWith("capability-engine")) expect(a).toBe(expected);
+      expect(packagesRoot({ VERIFIER_PACKAGES_ROOT: "/x/y" })).toBe("/x/y");
+    } finally {
+      process.chdir(before);
+    }
+  });
+
+  test("an empty or missing root logs an error and yields zero types", async () => {
+    const { logCatalogue } = await import("./catalogue.js");
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const empty = mkdtempSync(join(tmpdir(), "empty-"));
+    const errs: string[] = [];
+    const logs: string[] = [];
+    logCatalogue(
+      empty,
+      await loadCatalogue(empty),
+      (m) => logs.push(m),
+      (m) => errs.push(m),
+    );
+    expect(logs[0]).toBe(`catalogue: ${empty}, 0 packages: `);
+    expect(errs[0]).toMatch(/ERROR.*holds no packages/);
+    expect(new Catalogue(await loadCatalogue(empty)).view()).toEqual([]);
+    const missing = join(empty, "nope");
+    logCatalogue(
+      missing,
+      [],
+      () => {},
+      (m) => errs.push(m),
+    );
+    expect(errs[1]).toMatch(/does not exist/);
+  });
+
+  test("probe: reachable, unreachable, cached for 10 s, host only", async () => {
+    const { makeVerifierProbe, hostOnly } = await import("./catalogue.js");
+    let calls = 0;
+    let t = 0;
+    const ok = (async () => {
+      calls++;
+      return new Response("[]");
+    }) as unknown as typeof fetch;
+    const p = makeVerifierProbe("http://v.test", ok, () => t);
+    expect(await p()).toBe(true);
+    expect(await p()).toBe(true);
+    expect(calls).toBe(1);
+    t = 10_001;
+    await p();
+    expect(calls).toBe(2);
+    const down = (async () => {
+      throw new Error("x");
+    }) as unknown as typeof fetch;
+    expect(await makeVerifierProbe("http://v.test", down)()).toBe(false);
+    expect(await makeVerifierProbe(undefined)()).toBe(false);
+    expect(hostOnly("http://user:pw@10.0.0.2:7402/v0?k=1")).toBe("10.0.0.2:7402");
+  });
 });

@@ -89,13 +89,64 @@ describe("NewTaskButton task types", () => {
     expect(await within(d).findAllByRole("radio")).toHaveLength(1);
     expect(within(d).getByText("csv2json-v1")).toBeTruthy();
   });
+  it("says the engine cannot be reached when the fetch fails", async () => {
+    stubFetch(
+      () => Promise.reject(new TypeError("down")),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    expect(
+      await within(d).findByText(/^Cannot reach the engine at https?:\/\/.+\. Is it running\?$/),
+    ).toBeTruthy();
+  });
+  it("shows the verifier line when reachable, not reachable, and omits it when absent", async () => {
+    stubFetch(
+      () =>
+        json(200, {
+          ok: true,
+          types: MOCK_TASK_TYPES,
+          verifier_reachable: true,
+          verifier_url: "http://192.168.1.5:7410",
+        }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    expect(await within(d).findByText("Verifier: reachable at 192.168.1.5:7410")).toBeTruthy();
+    cleanup();
+    stubFetch(
+      () =>
+        json(200, {
+          ok: true,
+          types: MOCK_TASK_TYPES,
+          verifier_reachable: false,
+          verifier_url: "x",
+        }),
+      () => json(200, { ok: true }),
+    );
+    const d2 = await open();
+    expect(
+      await within(d2).findByText(
+        "Verifier: not reachable from the engine; tasks will be refused at deposit",
+      ),
+    ).toBeTruthy();
+    cleanup();
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      () => json(200, { ok: true }),
+    );
+    const d3 = await open();
+    await within(d3).findAllByRole("radio");
+    expect(within(d3).queryByText(/^Verifier:/)).toBeNull();
+  });
   it("disables SEND when no type is available", async () => {
     stubFetch(
       () => json(200, { task_types: [] }),
       () => json(200, { ok: true }),
     );
     const d = await open();
-    await within(d).findByText(/no task type can be offered/);
+    await within(d).findByText(
+      "The engine offers no task type. Its package catalogue is empty: check VERIFIER_PACKAGES_ROOT on the engine.",
+    );
     expect(
       (within(d).getByRole("button", { name: /start task/i }) as HTMLButtonElement).disabled,
     ).toBe(true);

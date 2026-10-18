@@ -578,6 +578,36 @@ test("GET /api/task-types lists the catalogue without directories", async () => 
   expect(JSON.stringify(j)).not.toContain(tmpdir());
 });
 
+test("GET /api/task-types reports verifier reachability and host only", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "types-"));
+  const mk = async (f: typeof fetch) => {
+    const engine = await createEd25519Signer(seed(2));
+    const principal = await createEd25519Signer(seed(1));
+    return buildServer({
+      logger: false,
+      ledger: Ledger.open(":memory:", k.P),
+      catalogue: new Catalogue(await loadCatalogue(dir)),
+      verifierUrl: "http://user:secret@10.1.2.3:7402",
+      verifierFetch: f,
+      identities: {
+        principal: principal.publicId,
+        engine: engine.publicId,
+        buyer: engine.publicId,
+      },
+      engineSigner: engine,
+    });
+  };
+  const up = await mk((async () => new Response("[]")) as unknown as typeof fetch);
+  const j1 = (await up.inject({ method: "GET", url: "/api/task-types" })).json();
+  expect(j1).toMatchObject({ ok: true, verifier_reachable: true, verifier_url: "10.1.2.3:7402" });
+  expect(JSON.stringify(j1)).not.toContain("secret");
+  const down = await mk((async () => {
+    throw new Error("refused");
+  }) as unknown as typeof fetch);
+  const j2 = (await down.inject({ method: "GET", url: "/api/task-types" })).json();
+  expect(j2).toMatchObject({ verifier_reachable: false, types: [] });
+});
+
 test("task-types route is behind the local-only guard", async () => {
   const principal = await createEd25519Signer(seed(1));
   const engine = await createEd25519Signer(seed(2));

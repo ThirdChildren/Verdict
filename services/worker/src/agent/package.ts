@@ -1,13 +1,19 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 
 /** Where the packages live; one subdirectory per package. `_judge` (the shared v2 judge) is not a package. */
+const HERE = dirname(fileURLToPath(import.meta.url));
+/** Repo-level catalogue, independent of the process cwd. */
+export const DEFAULT_PACKAGES_ROOT = resolve(HERE, "../../../../verifier-packages");
+
 export function packagesRoot(): string {
-  return resolve(process.env.VERIFIER_PACKAGES_ROOT ?? "verifier-packages");
+  return resolve(process.env.VERIFIER_PACKAGES_ROOT ?? DEFAULT_PACKAGES_ROOT);
 }
 
 const cache = new Map<string, Map<string, string>>();
+const logged = new Set<string>();
 
 /** sha256 -> directory for every package under root. Cached per root; pass refresh to rescan. */
 export async function packageMap(root: string, refresh = false): Promise<Map<string, string>> {
@@ -27,6 +33,15 @@ export async function packageMap(root: string, refresh = false): Promise<Map<str
     }
   }
   cache.set(root, map);
+  if (!logged.has(root)) {
+    logged.add(root);
+    const ids = [...map.values()].map((d) => basename(d));
+    if (map.size === 0)
+      console.error(
+        `[worker] ERROR: no verifier packages found under ${root}; every offer will be refused`,
+      );
+    else console.log(`[worker] verifier packages root ${root}: ${ids.join(", ")}`);
+  }
   return map;
 }
 

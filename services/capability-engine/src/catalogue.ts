@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 
 /** One verifiable task type: a hashed test package the engine may name in a contract. */
@@ -19,8 +20,68 @@ export interface TaskTypeView {
   package_sha256: string;
 }
 
+/** Repository root's verifier-packages, independent of the process cwd (src/ or dist/ is three levels below it). */
+export const DEFAULT_PACKAGES_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../verifier-packages",
+);
+
+/** VERIFIER_PACKAGES_ROOT when set (relative values resolve against the cwd), else the repository's verifier-packages. */
 export function packagesRoot(env: NodeJS.ProcessEnv = process.env): string {
-  return resolve(env.VERIFIER_PACKAGES_ROOT ?? "verifier-packages");
+  const o = env.VERIFIER_PACKAGES_ROOT;
+  return o ? resolve(o) : DEFAULT_PACKAGES_ROOT;
+}
+
+/** One startup line, plus an ERROR line when the root is missing or holds no loadable package. */
+export function logCatalogue(
+  root: string,
+  entries: readonly PackageEntry[],
+  log: (msg: string) => void = (m) => console.log(m),
+  error: (msg: string) => void = (m) => console.error(m),
+): void {
+  log(`catalogue: ${root}, ${entries.length} packages: ${entries.map((e) => e.id).join(", ")}`);
+  if (!existsSync(root))
+    error(`ERROR: catalogue root ${root} does not exist; no task type can be offered.`);
+  else if (entries.length === 0)
+    error(`ERROR: catalogue root ${root} holds no packages; no task type can be offered.`);
+}
+
+/** Host (with port) of a URL, never credentials, path or query; null when it cannot be parsed. */
+export function hostOnly(url: string): string | null {
+  try {
+    return new URL(url).host || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Asks the verifier for /v0/packages (2 s) and caches the answer for `ttlMs`. Never throws. */
+export function makeVerifierProbe(
+  url: string | undefined,
+  fetchImpl: typeof fetch = fetch,
+  now: () => number = Date.now,
+  ttlMs = 10_000,
+): () => Promise<boolean> {
+  let at = Number.NEGATIVE_INFINITY;
+  let last = false;
+  let inflight: Promise<boolean> | undefined;
+  return async () => {
+    if (!url) return false;
+    if (now() - at < ttlMs) return last;
+    inflight ??= (async () => {
+      try {
+        const r = await fetchImpl(`${url}/v0/packages`, { signal: AbortSignal.timeout(2000) });
+        last = r.ok;
+      } catch {
+        last = false;
+      }
+      at = now();
+      return last;
+    })().finally(() => {
+      inflight = undefined;
+    });
+    return inflight;
+  };
 }
 
 /**
