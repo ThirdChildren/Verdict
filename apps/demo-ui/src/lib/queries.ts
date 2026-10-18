@@ -10,8 +10,10 @@ import {
   fetchEvidence,
   fetchFunds,
   fetchTasks,
+  fetchTaskTypes,
   newTask,
   proposeMandate,
+  routeRequest,
   signAndInstall,
   simulateCompromisedAgent,
   submitTaskGoal,
@@ -85,8 +87,10 @@ export const useSignMandate = () =>
 export function useStartTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { amount: string; goal: string }) => {
-      await newTask(v.amount);
+    mutationFn: async (v: { amount: string; goal: string; request: string }) => {
+      // 1. the buyer maps the text to a task type (or refuses), 2. the engine binds it, 3. the buyer plans.
+      const routed = await routeRequest(v.request);
+      await newTask(v.amount, routed.package_id, v.request);
       await submitTaskGoal(v.goal);
     },
     onSuccess: () => {
@@ -138,3 +142,16 @@ export function useFunds(enabled: boolean) {
   }, [stamp, enabled, refetch]);
   return q;
 }
+
+/** Task types the verifier can check. Failure is an error state, not an empty list. */
+export const useTaskTypes = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["task-types"],
+    queryFn: fetchTaskTypes,
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+/** CHECK: step 1 alone. Nothing is created or sent. */
+export const useRouteRequest = () => useMutation({ mutationFn: routeRequest });

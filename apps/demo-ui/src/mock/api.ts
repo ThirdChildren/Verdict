@@ -10,6 +10,7 @@ import {
   type TaskList,
 } from "../lib/api.js";
 import { fromMinor, toMinor } from "../lib/money.js";
+import { MOCK_TASK_TYPES, type TaskType } from "../lib/taskTypes.js";
 import { type PackageStats, parseStats } from "../lib/verifierApi.js";
 import { useStore } from "../store.js";
 import { MOCK_PAYEE_NAMES, MOCK_ROOT, MOCK_WORKER_ID } from "./events.js";
@@ -64,7 +65,28 @@ export async function fetchVerifierStats(): Promise<PackageStats[]> {
 export async function newTask(): Promise<string> {
   return "mock".repeat(16);
 }
-export async function submitTaskGoal(): Promise<void> {}
+export async function submitTaskGoal(goal = ""): Promise<void> {
+  // The buyer agent only accepts work a hashed package can verify; here that is anything about CSV or JSON.
+  if (!/csv|json/i.test(goal)) throw new ApiError("TASK_NOT_VERIFIABLE", MOCK_REFUSAL_MESSAGE);
+}
+
+export const MOCK_REFUSAL_MESSAGE =
+  "Verdict only buys work it can verify. This request does not match any task type available today.";
+
+export async function routeRequest(
+  request: string,
+): Promise<{ package_id: string; reason: string }> {
+  // MOCK DATA: the buyer routes by keyword.
+  if (/csv/i.test(request))
+    return { package_id: "csv2json-v1", reason: "The request names a CSV conversion." };
+  if (/json/i.test(request))
+    return { package_id: "json-normalise-v1", reason: "The request names a JSON document." };
+  throw new ApiError("TASK_NOT_VERIFIABLE", MOCK_REFUSAL_MESSAGE);
+}
+
+export async function fetchTaskTypes(): Promise<TaskType[]> {
+  return MOCK_TASK_TYPES;
+}
 
 export async function fetchEvidence(taskId: string): Promise<Evidence> {
   const contract = { mock: true, task: "csv2json", price: "1.20", signature: "0xmock" };

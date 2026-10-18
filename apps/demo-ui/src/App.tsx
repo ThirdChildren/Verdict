@@ -81,6 +81,7 @@ export function App() {
     const st = useStore.getState();
     for (const svc of ["engine", "worker", "verifier"] as const) st.setConnection(svc, "mock");
     for (const e of scene.events) st.apply(e);
+    for (const r of scene.refusals ?? []) st.refuse(r);
     // Same path as a real reload: the list and the task -> mandate links come from the (mock) API.
     setMockHistory(scene.history ?? null);
     void hydrateFromApi();

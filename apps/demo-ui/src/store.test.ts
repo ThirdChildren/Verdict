@@ -170,3 +170,24 @@ describe("mock refund", () => {
     s.reset();
   });
 });
+
+describe("TASK_REFUSED", () => {
+  it("is kept as a refusal without creating a task row", async () => {
+    const { parseRefusedEvent } = await import("./lib/refused.js");
+    const r = parseRefusedEvent(
+      JSON.stringify({
+        type: "TASK_REFUSED",
+        reason: "not verifiable",
+        task_types: ["csv2json-v1"],
+      }),
+    );
+    expect(r?.task_types[0]?.id).toBe("csv2json-v1");
+    if (!r) throw new Error("not parsed");
+    useStore.getState().refuse(r);
+    const s = useStore.getState();
+    expect(s.refusals[0]?.reason).toBe("not verifiable");
+    expect(railRows(s)).toHaveLength(0);
+    useStore.getState().reset();
+    expect(useStore.getState().refusals).toEqual([]);
+  });
+});

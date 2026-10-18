@@ -12,6 +12,7 @@ import { create } from "zustand";
 import type { MandateRow } from "./lib/mandates.js";
 import type { MineProgress } from "./lib/mine.js";
 import { precisionOf } from "./lib/money.js";
+import type { TaskRefusal } from "./lib/refused.js";
 import type { MandateRetired } from "./lib/retired.js";
 import { mandateOfBlock, scopeLists } from "./lib/scope.js";
 import { flowFor, stepForState } from "./lib/steps.js";
@@ -114,6 +115,8 @@ export interface AppState {
   /** Child capability id -> parent root hash (from CAP_CHILD). */
   capParents: Record<string, string>;
   principal: PrincipalState;
+  /** Requests refused as not verifiable (engine TASK_REFUSED, outside the protocol event stream), newest first. */
+  refusals: TaskRefusal[];
 }
 
 export const initialState: AppState = {
@@ -144,6 +147,7 @@ export const initialState: AppState = {
   taskRoots: {},
   capParents: {},
   principal: { status: "disconnected" },
+  refusals: [],
 };
 
 const lazyRow = (hash: string, order: number): MandateRow => ({
@@ -375,6 +379,7 @@ interface Actions {
   select: (key: string) => void;
   setMine: (p: MineProgress) => void;
   retire: (r: MandateRetired) => void;
+  refuse: (r: TaskRefusal) => void;
   /** Rebuilds the mandate map and the task -> mandate links from the API (newest mandate first). */
   hydrate: (rows: MandateRow[], taskRoots: Record<string, string>) => void;
   selectMandate: (hash: string) => void;
@@ -405,6 +410,7 @@ export const useStore = create<AppState & Actions>((set) => ({
         ],
       };
     }),
+  refuse: (r) => set((s) => ({ refusals: [r, ...s.refusals].slice(0, 20) })),
   hydrate: (rows, taskRoots) =>
     set((s) => {
       const mandates = new Map<string, MandateRow>();

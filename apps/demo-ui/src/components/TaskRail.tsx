@@ -76,6 +76,20 @@ export function TaskRail(props: {
               ))}
             </ul>
           )}
+          {props.state.refusals.length > 0 && (
+            <ul aria-label="Refused requests" className="mt-2 grid gap-1">
+              {props.state.refusals.map((r, i) => (
+                <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: refusals have no id; the list only grows at the head
+                  key={i}
+                  title={r.reason}
+                  className="text-sm text-subtle"
+                >
+                  Request refused: not verifiable
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </nav>
     </div>

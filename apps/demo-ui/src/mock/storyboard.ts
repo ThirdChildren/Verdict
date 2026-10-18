@@ -2,6 +2,8 @@
 // plus, where needed, a few extra recorded-style events. Everything is validated against the protocol schema.
 import { capabilityHash, type TaskState, type UiEvent, uiEventSchema } from "@verdict/protocol";
 import type { Live } from "../components/WorkerLane.js";
+import type { TaskRefusal } from "../lib/refused.js";
+import { MOCK_TASK_TYPES } from "../lib/taskTypes.js";
 import type { MockHistory } from "./api.js";
 import { MOCK_EVENTS, MOCK_ROOT } from "./events.js";
 
@@ -14,6 +16,8 @@ export interface Scene {
   live?: Live;
   /** What GET /api/mandates and GET /api/tasks answer in this scene (reload / history). */
   history?: MockHistory;
+  /** Requests refused as not verifiable (UI-only TASK_REFUSED events). */
+  refusals?: TaskRefusal[];
 }
 
 const upto = (pred: (e: UiEvent) => boolean): UiEvent[] => {
@@ -225,5 +229,16 @@ export const SCENES: Scene[] = [
     events: upto(state("CLAIMED")),
   },
   { id: "mandates-history", label: "14 · Two mandates (history)", ...twoMandates() },
+  {
+    id: "refused",
+    label: '15 · Refused request (open NEW TASK, goal "develop a snake game")',
+    events: upto(state("CLAIMED")),
+    refusals: [
+      {
+        reason: "Verdict only buys work it can verify. No task type matches this request.",
+        task_types: MOCK_TASK_TYPES,
+      },
+    ],
+  },
 ];
 export const PLAY = "play";

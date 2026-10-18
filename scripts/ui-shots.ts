@@ -35,6 +35,19 @@ async function wizard(p: Page, text: string, stage: 1 | 2): Promise<void> {
 }
 // Extend here (e.g. the demo console) with another { id, scene, act }.
 const EXTRAS: Extra[] = [
+  {
+    id: "refused",
+    scene: "refused",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^new task$/i }).click();
+      await p.getByLabel(/what should the worker do/i).fill("develop a snake game");
+      await p.getByRole("button", { name: /start task/i }).click();
+      await p
+        .getByRole("alert")
+        .filter({ hasText: /only buys work it can verify/i })
+        .waitFor();
+    },
+  },
   { id: "mandate-dialog", scene: "authorized", act: (p) => p.keyboard.press("m") },
   {
     id: "mandate-wizard",

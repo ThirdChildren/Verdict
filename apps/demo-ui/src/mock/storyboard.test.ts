@@ -25,6 +25,7 @@ describe("mock storyboard", () => {
       "blocked",
       "second-mandate",
       "mandates-history",
+      "refused",
     ]);
   });
   it("each scene reduces to the intended chip and step", () => {

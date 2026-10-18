@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as mock from "../mock/api.js";
 import { type MandateRow, parseMandates, parseTaskRoots } from "./mandates.js";
 import { isMock } from "./mode.js";
+import { DEFAULT_TASK_TYPES, parseTaskTypes, type TaskType } from "./taskTypes.js";
 import { fetchWorkerDelivery } from "./workerApi.js";
 
 const host = (envPort: string | undefined, def: string, param: string): string => {
@@ -199,13 +200,57 @@ async function getJson(url: string): Promise<unknown> {
 }
 
 /** Derives a fresh child capability from the active root. No new signature is needed. */
-export async function newTask(amount?: string): Promise<string> {
+export async function newTask(
+  amount?: string,
+  packageId?: string,
+  request?: string,
+): Promise<string> {
   if (isMock()) return mock.newTask();
   const r = z
     .object({ cap_hash: z.string() })
     .passthrough()
-    .parse(await post(`${engineBase()}/api/mandate/task`, amount === undefined ? {} : { amount }));
+    .parse(
+      await post(`${engineBase()}/api/mandate/task`, {
+        ...(amount === undefined ? {} : { amount }),
+        ...(packageId === undefined ? {} : { package_id: packageId }),
+        ...(request === undefined ? {} : { request }),
+      }),
+    );
   return r.cap_hash;
+}
+
+/** Asks the buyer agent which task type a request maps to. A 422 TASK_NOT_VERIFIABLE comes back as an ApiError. */
+export async function routeRequest(
+  request: string,
+): Promise<{ package_id: string; reason: string }> {
+  if (isMock()) return mock.routeRequest(request);
+  const r = z
+    .object({ package_id: z.string(), reason: z.string().optional() })
+    .passthrough()
+    .safeParse(await post(`${buyerBase()}/api/route`, { request }));
+  if (!r.success)
+    throw new ApiError(
+      "BAD_RESPONSE",
+      "The buyer agent sent a routing answer this screen cannot read.",
+    );
+  return { package_id: r.data.package_id, reason: r.data.reason ?? "" };
+}
+
+/** Task types the verifier can check. 404 (older engine): the one package that always existed. */
+export async function fetchTaskTypes(): Promise<TaskType[]> {
+  if (isMock()) return mock.fetchTaskTypes();
+  let res: Response;
+  try {
+    res = await fetch(`${engineBase()}/api/task-types`);
+  } catch {
+    throw new ApiError("UNREACHABLE", "The engine could not be reached.");
+  }
+  if (res.status === 404) return DEFAULT_TASK_TYPES;
+  if (!res.ok) throw new ApiError("HTTP_ERROR", `The engine answered with status ${res.status}.`);
+  const list = parseTaskTypes(await res.json().catch(() => null));
+  if (!list)
+    throw new ApiError("BAD_RESPONSE", "The engine sent a task-type list this screen cannot read.");
+  return list;
 }
 
 /** Sends the goal of a new task to the buyer agent, under the already signed mandate. */

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { ApiError } from "../lib/api.js";
 import { readOnlyReason } from "../lib/mandates.js";
 import { fromMinor, toMinor } from "../lib/money.js";
-import { useStartTask } from "../lib/queries.js";
+import { useRouteRequest, useStartTask, useTaskTypes } from "../lib/queries.js";
 import {
   AMOUNT_STEP,
   amountProblem,
@@ -24,6 +24,7 @@ import {
   DEFAULT_TASK_DESCRIPTION,
   defaultTaskAmount,
 } from "../lib/taskText.js";
+import { isUnverifiable, type TaskType } from "../lib/taskTypes.js";
 import { useStore } from "../store.js";
 import { Mark } from "./Mark.js";
 
@@ -69,6 +70,9 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // A refusal ("this cannot be verified") is not a failure: nothing was sent, and the choices are listed.
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
   // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
   const remaining = budget?.remaining ?? root?.max_total ?? "0";
   const readOnly = useStore((s) =>
@@ -85,6 +89,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   });
   const worker = workerNameFor(root?.allowed_payees ?? [], names);
   const start = useStartTask();
+  const types = useTaskTypes(open);
+  const route = useRouteRequest();
+  const resetRoute = route.reset;
+  const [mapped, setMapped] = useState<{ id: string; reason: string } | null>(null);
+  const list: TaskType[] = types.data ?? [];
+  // Default: the first listed type, until the user picks another.
+  const selectedType = list.find((t) => t.id === chosen)?.id ?? list[0]?.id ?? null;
   const { reset } = form;
 
   // Only a signal that changes while this button is mounted opens the dialog: a key pressed earlier is stale.
@@ -99,23 +110,44 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   useEffect(() => {
     if (open) {
       setFailure(null);
+      setRefusal(null);
+      setChosen(null);
+      setMapped(null);
+      resetRoute();
       reset({
         description: DEFAULT_TASK_DESCRIPTION,
         amount: defaultTaskAmount(remaining, precision),
       });
     }
-  }, [open, remaining, precision, reset]);
+  }, [open, remaining, precision, reset, resetRoute]);
 
+  const check = async () => {
+    setRefusal(null);
+    setFailure(null);
+    setMapped(null);
+    try {
+      const r = await route.mutateAsync(description.trim());
+      setMapped({ id: r.package_id, reason: r.reason });
+      setChosen(r.package_id);
+    } catch (err) {
+      if (err instanceof ApiError && isUnverifiable(err.code)) setRefusal(err.message);
+      else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+    }
+  };
   const submit = form.handleSubmit(async (v) => {
     try {
+      setFailure(null);
+      setRefusal(null);
       await start.mutateAsync({
         amount: v.amount,
+        request: v.description.trim(),
         goal: composeTaskGoal(v.amount, worker, v.description),
       });
       setSent(`Task sent: ${v.amount} tUSD to ${worker}.`);
       setOpen(false);
     } catch (err) {
-      setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+      if (err instanceof ApiError && isUnverifiable(err.code)) setRefusal(err.message);
+      else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
     }
   });
   const amount = form.watch("amount");
@@ -158,6 +190,51 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 The agent gets a narrower permission just for this task. No new signature needed.
               </DialogDescription>
             </DialogHeader>
+            <fieldset className="grid gap-2" aria-describedby={`${id}-tt`}>
+              <legend className="text-lg font-semibold">Task type</legend>
+              {types.isPending ? (
+                <p role="status">Loading the task types the verifier can check...</p>
+              ) : types.isError ? (
+                <p role="alert" className="font-semibold">
+                  The task types could not be loaded. Nothing can be sent until they are.
+                </p>
+              ) : list.length === 0 ? (
+                <p role="alert" className="font-semibold">
+                  The verifier is not reachable, so no task type can be offered.
+                </p>
+              ) : (
+                <ul className="divide-y divide-rule-soft border-y border-rule-soft">
+                  {list.map((t) => (
+                    <li key={t.id}>
+                      <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 py-2">
+                        <input
+                          type="radio"
+                          name={`${id}-type`}
+                          value={t.id}
+                          checked={selectedType === t.id}
+                          onChange={() => setChosen(t.id)}
+                        />
+                        <span>
+                          <span className="font-mono text-sm font-semibold uppercase">{t.id}</span>
+                          <span className="block text-base">{t.description}</span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {mapped && (
+                <p role="status" className="text-base font-semibold">
+                  The buyer agent mapped this to {mapped.id.toUpperCase()}
+                  {mapped.reason ? `: ${mapped.reason}` : "."}
+                </p>
+              )}
+              <p id={`${id}-tt`} className="text-base text-subtle">
+                {selectedType
+                  ? `Will be verified as: ${selectedType.toUpperCase()}. The buyer agent confirms the match before any payment.`
+                  : "Verdict only buys work it can verify."}
+              </p>
+            </fieldset>
             <div className="grid gap-2">
               <Label htmlFor={`${id}-d`} className="text-lg font-semibold">
                 What should the worker do?
@@ -173,10 +250,6 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                   {errors.description.message}
                 </p>
               )}
-              <p className="text-base text-subtle">
-                Today the worker can only convert CSV files to JSON; any other job fails the test
-                and is refunded.
-              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor={`${id}-a`} className="text-lg font-semibold">
@@ -201,6 +274,24 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
             <p className="text-base text-subtle">
               The agent will be told: "{composeTaskGoal(amount, worker, description)}"
             </p>
+            {refusal && (
+              <div
+                role="alert"
+                className=" border border-rule-soft border-l-4 border-l-bad bg-card px-4 py-2"
+              >
+                <p className="font-semibold">{refusal}</p>
+                <p className="text-base">Task types available today:</p>
+                <ul>
+                  {list.map((t) => (
+                    <li key={t.id} className="text-base">
+                      <span className="font-mono text-sm font-semibold uppercase">{t.id}</span>{" "}
+                      {t.description}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-base">Nothing was sent.</p>
+              </div>
+            )}
             {failure && (
               <p
                 role="alert"
@@ -213,7 +304,15 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={start.isPending}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void check()}
+                disabled={route.isPending || start.isPending || description.trim().length < 3}
+              >
+                {route.isPending ? "Checking..." : "Check"}
+              </Button>
+              <Button type="submit" disabled={start.isPending || selectedType === null}>
                 {start.isPending ? "Sending..." : "Start task"}
               </Button>
             </DialogFooter>
