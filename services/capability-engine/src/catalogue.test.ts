@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEd25519Signer, offeredContractSchema, spendIntentSchema } from "@verdict/protocol";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { expect, test } from "vitest";
-import { Catalogue, intersectWithVerifier, loadCatalogue } from "./catalogue.js";
+import { Catalogue, intersectWithVerifier, loadCatalogue, scanCatalogue } from "./catalogue.js";
 import { EventBus } from "./events.js";
 import { Ledger } from "./ledger/index.js";
 import { OfferService } from "./offer.js";
@@ -125,4 +125,52 @@ test("single-entry catalogue: an unbound task uses the default hash", async () =
   s.accept("1".repeat(64), "a".repeat(64));
   expect(await s.svc.offerFor("1".repeat(64))).toMatchObject({ ok: true });
   expect(contractOf(s.ledger, "1".repeat(64)).verifier.package_sha256).toBe(es[0]?.hash);
+});
+
+test("skips with a warning: bad manifest and symlinked directory; counts scanned", async () => {
+  const root = mkRoot();
+  mkdirSync(join(root, "broken"));
+  writeFileSync(join(root, "broken", "manifest.json"), "{nope");
+  symlinkSync(join(root, "csv2json-v1"), join(root, "linked"));
+  const warns: string[] = [];
+  const r = await scanCatalogue(root, (m) => warns.push(m));
+  expect(r.entries.map((e) => e.id)).toEqual(["csv2json-v1", "json-normalise-v1"]);
+  expect(r.scanned).toBe(4);
+  expect(warns.some((w) => w.includes("broken"))).toBe(true);
+  expect(warns.some((w) => w.includes("linked"))).toBe(true);
+});
+
+test("single-entry default only when the root holds exactly one package directory", async () => {
+  const one = mkdtempSync(join(tmpdir(), "pkgs-"));
+  mkdirSync(join(one, "a"));
+  writeFileSync(join(one, "a", "manifest.json"), "{}");
+  const r1 = await scanCatalogue(one);
+  expect(new Catalogue(r1.entries, r1.scanned).defaultEntry?.id).toBe("a");
+  mkdirSync(join(one, "b"));
+  writeFileSync(join(one, "b", "manifest.json"), "{bad");
+  const r2 = await scanCatalogue(one, () => {});
+  expect(r2.entries).toHaveLength(1);
+  expect(new Catalogue(r2.entries, r2.scanned).defaultEntry).toBeUndefined();
+});
+
+test("duplicate ids are rejected at load", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pkgs-"));
+  for (const n of ["x", "y"]) {
+    mkdirSync(join(root, n));
+    writeFileSync(join(root, n, "manifest.json"), JSON.stringify({ id: "same" }));
+  }
+  await expect(scanCatalogue(root)).rejects.toThrow(/same/);
+});
+
+test("a failed startup intersection is retried at the first offer", async () => {
+  const es = await loadCatalogue(mkRoot());
+  const only = es.slice(1);
+  let calls = 0;
+  const cat = new Catalogue(es, 2, async () => (++calls === 1 ? null : only));
+  await cat.ensureVerified();
+  expect(cat.entries).toHaveLength(2);
+  await cat.ensureVerified();
+  expect(cat.entries.map((e) => e.id)).toEqual(["json-normalise-v1"]);
+  await cat.ensureVerified();
+  expect(calls).toBe(2);
 });

@@ -1,5 +1,5 @@
 // Package catalogue (E31 AC13): every package under VERIFIER_PACKAGES_ROOT, keyed by its content hash.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { judgeAllowList, parseManifest } from "./manifest.js";
@@ -59,18 +59,32 @@ export async function describePackage(
 export class Catalogue {
   constructor(private readonly entries: CatalogueEntry[]) {}
 
-  static async fromRoot(root: string, allow?: Set<string>): Promise<Catalogue> {
+  static async fromRoot(
+    root: string,
+    allow?: Set<string>,
+    warn: (msg: string) => void = (m) => console.warn(`[verifier] ${m}`),
+  ): Promise<Catalogue> {
     const base = resolve(root);
     const out: CatalogueEntry[] = [];
     for (const name of readdirSync(base).sort()) {
       if (name === "_judge" || name.startsWith(".")) continue;
       const dir = join(base, name);
       try {
-        if (!statSync(dir).isDirectory()) continue;
+        const st = lstatSync(dir);
+        if (st.isSymbolicLink()) {
+          warn(`skipping ${dir}: a symlinked package directory is not allowed`);
+          continue;
+        }
+        if (!st.isDirectory()) continue;
         out.push(await describePackage(dir, allow));
-      } catch {
-        // an unreadable directory is simply not in the catalogue
+      } catch (e) {
+        warn(`skipping ${dir}: ${(e as Error).message}`);
       }
+    }
+    const seen = new Set<string>();
+    for (const e of out) {
+      if (seen.has(e.id)) throw new Error(`Duplicate verifier package id "${e.id}" in ${base}.`);
+      seen.add(e.id);
     }
     return new Catalogue(out);
   }

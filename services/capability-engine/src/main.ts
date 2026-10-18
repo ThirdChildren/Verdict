@@ -11,7 +11,7 @@ import {
   registerWdkEip191Verifier,
   WalletClient,
 } from "@verdict/wallet";
-import { Catalogue, intersectWithVerifier, loadCatalogue, packagesRoot } from "./catalogue.js";
+import { Catalogue, intersectWithVerifier, packagesRoot, scanCatalogue } from "./catalogue.js";
 import { bitcoindHeight, resolveBitcoindRpc } from "./chain.js";
 import { hardLimits } from "./config.js";
 import { contractLimits } from "./contract-config.js";
@@ -40,16 +40,26 @@ try {
   const limits = contractLimits();
   const walletOn = process.env.VERDICT_WALLET === "1";
   const root = packagesRoot();
-  const found = await loadCatalogue(root);
-  const meet = await intersectWithVerifier(found, peers.verifier);
-  console.log(
+  const { entries: found, scanned } = await scanCatalogue(root);
+  const verifierUrl = peers.verifier;
+  const meet = await intersectWithVerifier(found, verifierUrl);
+  console.log(`task types: ${meet.entries.map((e) => e.id).join(", ") || "none"}`);
+  if (!meet.filtered)
+    console.warn(
+      `WARNING: the verifier at ${verifierUrl} gave no package list; all local task types are kept and will be re-checked at the first offer.`,
+    );
+  const catalogue = new Catalogue(
+    meet.entries,
+    scanned,
     meet.filtered
-      ? `task types: ${meet.entries.map((e) => e.id).join(", ") || "none"} (also on the verifier)`
-      : `task types: ${meet.entries.map((e) => e.id).join(", ") || "none"} (verifier list unavailable, all kept)`,
+      ? undefined
+      : async () => {
+          const r = await intersectWithVerifier(found, verifierUrl);
+          return r.filtered ? r.entries : null;
+        },
   );
-  const catalogue = new Catalogue(meet.entries);
-  // Default package for a task with no type, used only while the catalogue has exactly one entry.
-  const defaultPackage = meet.entries.length === 1 ? meet.entries[0]?.hash : undefined;
+  // Default package for a task with no type, used only while the root holds exactly one package.
+  const defaultPackage = catalogue.defaultEntry?.hash;
   app = await buildServer({
     ledger,
     localOnly,

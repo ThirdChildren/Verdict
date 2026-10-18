@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -453,5 +453,38 @@ describe("package catalogue (E31 AC13)", () => {
     expect(
       (await deposit(ctx, { packageSha: await dirHashFromDisk(JSON_PKG) })).answer,
     ).toMatchObject({ ok: true });
+  });
+});
+
+describe("catalogue loading", () => {
+  const mk = (names: string[]) => {
+    const root = mkdtempSync(join(scratch, "cat-"));
+    for (const n of names) {
+      mkdirSync(join(root, n));
+      writeFileSync(join(root, n, "verify.sh"), "x");
+      writeFileSync(join(root, n, "manifest.json"), JSON.stringify({ id: n }));
+    }
+    return root;
+  };
+  it("warns about a skipped symlinked directory", async () => {
+    const root = mk(["a"]);
+    symlinkSync(join(root, "a"), join(root, "link"));
+    const warns: string[] = [];
+    const c = await Catalogue.fromRoot(root, undefined, (m) => warns.push(m));
+    expect(c.list().map((e) => e.id)).toEqual(["a"]);
+    expect(warns.some((w) => w.includes("link"))).toBe(true);
+  });
+  it("warns about an unreadable package directory", async () => {
+    const root = mk(["a"]);
+    mkdirSync(join(root, "bad"));
+    symlinkSync("/nonexistent", join(root, "bad", "dangling"));
+    const warns: string[] = [];
+    await Catalogue.fromRoot(root, undefined, (m) => warns.push(m));
+    expect(warns.some((w) => w.includes("bad"))).toBe(true);
+  });
+  it("rejects duplicate ids", async () => {
+    const root = mk(["a", "b"]);
+    writeFileSync(join(root, "b", "manifest.json"), JSON.stringify({ id: "a" }));
+    await expect(Catalogue.fromRoot(root, undefined, () => {})).rejects.toThrow(/Duplicate/);
   });
 });

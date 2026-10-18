@@ -26,6 +26,8 @@ const defaultPkg = join(
 );
 const packagesRoot = process.env.VERIFIER_PACKAGES_ROOT ?? resolve(dirname(defaultPkg));
 async function byHash(hash: string): Promise<string> {
+  if (!/^[0-9a-f]{64}$/.test(hash))
+    throw new RerunError("--hash must be 64 lowercase hex characters.");
   const e = (await Catalogue.fromRoot(packagesRoot)).byHash(hash);
   if (!e?.usable) throw new RerunError("No package on this machine matches the recorded hash.");
   return e.dir;

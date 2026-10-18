@@ -295,12 +295,7 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
           typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
         const wanted = typeof rec.package_id === "string" ? rec.package_id : undefined;
         // One entry and no choice made: that entry is the default (the single-package demo). Anything else must be named.
-        chosen =
-          wanted === undefined
-            ? d.catalogue.entries.length === 1
-              ? d.catalogue.entries[0]
-              : undefined
-            : d.catalogue.byId(wanted);
+        chosen = wanted === undefined ? d.catalogue.defaultEntry : d.catalogue.byId(wanted);
         if (!chosen) {
           const message = `Verdict only buys work it can verify. Task types available: ${d.catalogue.describe() || "none right now"}.`;
           d.bus.publish(

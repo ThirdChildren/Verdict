@@ -74,6 +74,7 @@ export class OfferService {
 
     let packageSha256: string;
     try {
+      await this.c.catalogue?.ensureVerified();
       packageSha256 = this.packageFor(accepted.capHash);
     } catch (e) {
       return block("MALFORMED_INTENT", {
@@ -145,7 +146,7 @@ export class OfferService {
         throw new Error("the task's test package is not in the engine's catalogue");
       return bound.packageSha256;
     }
-    if (cat && cat.entries.length !== 1)
+    if (cat && !cat.defaultEntry)
       throw new Error("no verifiable task type is bound to this permission");
     const dflt = this.c.verifier.packageSha256;
     if (cat && !cat.byHash(dflt))
