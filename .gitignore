@@ -19,3 +19,4 @@ data/
 # Team tooling, never part of the submission
 .claude/
 CLAUDE.local.md
+verifier-packages/custom-*

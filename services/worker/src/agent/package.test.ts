@@ -108,6 +108,19 @@ describe("package resolution by hash", () => {
   });
 });
 
+describe("rescan on miss", () => {
+  it("finds a package installed after the first scan", async () => {
+    const root = join(tmp, "late-root");
+    mkdirSync(join(root, "a"), { recursive: true });
+    writeFileSync(join(root, "a", "verify.sh"), "a");
+    expect((await packageMap(root)).size).toBe(1);
+    mkdirSync(join(root, "b"));
+    writeFileSync(join(root, "b", "verify.sh"), "b");
+    const sha = await dirHashFromDisk(join(root, "b"));
+    expect(await resolvePackageDir(sha, root)).toBe(join(root, "b"));
+  });
+});
+
 describe("hints", () => {
   it("specific, generic by kind, then fallback", () => {
     expect(hintFor("csv2json-v1", "tests")).toContain("line break");

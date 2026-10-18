@@ -26,7 +26,8 @@ import { type DemoRouteDeps, registerDemoToggleRoutes } from "./api/demo.js";
 import { registerEvidenceRoutes } from "./api/evidence.js";
 import { registerFundsRoutes } from "./api/funds.js";
 import { type EngineIdentities, registerMandateRoutes } from "./api/mandate.js";
-import { type Catalogue, hostOnly, makeVerifierProbe } from "./catalogue.js";
+import { registerTaskTypeInstall } from "./api/task-types.js";
+import { type Catalogue, hostOnly, makeVerifierProbe, packagesRoot } from "./catalogue.js";
 import { type HardLimits, hardLimits } from "./config.js";
 import { Escrow } from "./escrow.js";
 import { type EngineEvent, EventBus } from "./events.js";
@@ -75,6 +76,10 @@ export interface ServerOptions {
   taskTtlMs?: number;
   /** Verifiable task types (verifier-packages/*). Enables GET /api/task-types and the refusal in POST /api/mandate/task. */
   catalogue?: Catalogue;
+  /** Where POST /api/task-types writes custom packages (default: packagesRoot()). */
+  packagesRoot?: string;
+  /** Test seam: how long POST /api/task-types waits for the verifier to list a new package (default 3000 ms). */
+  verifierWaitMs?: number;
   /** Verifier base URL, reported (host only) and probed by GET /api/task-types. */
   verifierUrl?: string;
   /** Demo console: the "mine until refund" route exists only when `enabled` (VERDICT_DEMO_TOGGLES=1). */
@@ -146,6 +151,17 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       };
     });
   }
+  if (cat)
+    registerTaskTypeInstall(app, {
+      catalogue: cat,
+      bus,
+      now,
+      root: opts.packagesRoot ?? packagesRoot(),
+      ...(opts.mandateRateLimit ? { rateLimit: opts.mandateRateLimit } : {}),
+      ...(opts.verifierUrl ? { verifierUrl: opts.verifierUrl } : {}),
+      ...(opts.verifierFetch ? { verifierFetch: opts.verifierFetch } : {}),
+      ...(opts.verifierWaitMs !== undefined ? { verifierWaitMs: opts.verifierWaitMs } : {}),
+    });
   if (opts.ledger)
     registerEvidenceRoutes(app, {
       ledger: opts.ledger,

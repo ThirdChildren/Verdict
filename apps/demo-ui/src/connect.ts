@@ -1,3 +1,4 @@
+import { parseTypeAddedEvent } from "./lib/authoring.js";
 import { hydrateFromApi } from "./lib/hydrate.js";
 import { parseMineEvent } from "./lib/mine.js";
 import { parseUiEvent } from "./lib/parse.js";
@@ -36,6 +37,8 @@ export function connectEngine(): () => void {
       if (retired) return useStore.getState().retire(retired);
       const refused = parseRefusedEvent(m.data);
       if (refused) return useStore.getState().refuse(refused);
+      const added = parseTypeAddedEvent(m.data);
+      if (added) return useStore.getState().addTaskType(added);
       const r = parseUiEvent(m.data);
       if (r.ok) useStore.getState().apply(r.event);
       else useStore.getState().reject();

@@ -26,6 +26,7 @@ describe("mock storyboard", () => {
       "second-mandate",
       "mandates-history",
       "refused",
+      "author",
     ]);
   });
   it("each scene reduces to the intended chip and step", () => {
@@ -42,5 +43,15 @@ describe("mock storyboard", () => {
     expect(t && stepViews(t, { engine: "E", worker: "W", verifier: "V" })[4]?.label).toBe(
       "Refunded",
     );
+  });
+});
+
+describe("mock authoring", () => {
+  it("answers by keyword", async () => {
+    const { mockDraft } = await import("../lib/authoring.js");
+    expect(mockDraft("sum two numbers")?.feasibility).toBe("cli");
+    expect(mockDraft("sum two numbers")?.hidden.length).toBeGreaterThanOrEqual(5);
+    expect(mockDraft("a snake game")?.feasibility).toBe("reframe");
+    expect(mockDraft("a blog post")).toBeNull();
   });
 });

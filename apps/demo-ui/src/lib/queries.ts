@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "../store.js";
 import {
+  authorTest,
   type Chain,
   type Evidence,
   type Funds,
@@ -11,6 +12,7 @@ import {
   fetchFunds,
   fetchTasks,
   fetchTaskTypes,
+  installTaskType,
   newTask,
   proposeMandate,
   routeRequest,
@@ -155,3 +157,17 @@ export const useTaskTypes = (enabled: boolean) =>
 
 /** CHECK: step 1 alone. Nothing is created or sent. */
 export const useRouteRequest = () => useMutation({ mutationFn: routeRequest });
+
+/** WRITE A TEST: the buyer agent drafts an acceptance test for a request. Nothing is installed. */
+export const useAuthorTest = () => useMutation({ mutationFn: authorTest });
+
+/** INSTALL TEST AND USE IT: the engine turns the draft into a task type; the list is refetched. */
+export function useInstallTaskType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: installTaskType,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["task-types"] });
+    },
+  });
+}

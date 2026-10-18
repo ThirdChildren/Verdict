@@ -1,6 +1,7 @@
 import { BLOCK_CODES, type BlockCode, verdictRecordSchema } from "@verdict/protocol";
 import { z } from "zod";
 import * as mock from "../mock/api.js";
+import { type Draft, type Installed, installedSchema, parseAuthorAnswer } from "./authoring.js";
 import { type MandateRow, parseMandates, parseTaskRoots } from "./mandates.js";
 import { isMock } from "./mode.js";
 import {
@@ -439,4 +440,22 @@ export async function fetchPrincipal(): Promise<{ id: string }> {
   if (!r.success)
     throw new ApiError("BAD_RESPONSE", "The engine sent a principal id this screen cannot read.");
   return { id: r.data.id };
+}
+
+/** Asks the buyer agent to write an acceptance test for a request. Refusals (AUTHOR_FAILED, TASK_NOT_VERIFIABLE) are ApiErrors. */
+export async function authorTest(request: string): Promise<Draft> {
+  if (isMock()) return mock.authorTest(request);
+  const draft = parseAuthorAnswer(await post(`${buyerBase()}/api/author`, { request }));
+  if (!draft)
+    throw new ApiError("BAD_RESPONSE", "The buyer agent sent a test this screen cannot read.");
+  return draft;
+}
+
+/** Installs a (possibly edited) draft as a task type on the engine. 422 DRAFT_REJECTED / 503 come back as ApiErrors. */
+export async function installTaskType(draft: Draft): Promise<Installed> {
+  if (isMock()) return mock.installTaskType(draft);
+  const r = installedSchema.safeParse(await post(`${engineBase()}/api/task-types`, { draft }));
+  if (!r.success)
+    throw new ApiError("BAD_RESPONSE", "The engine sent an answer this screen cannot read.");
+  return r.data;
 }

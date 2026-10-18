@@ -351,7 +351,8 @@ export class VerifierService {
     let hit: { id: string; dir: string } | null = null;
     try {
       if (cat) {
-        const e = cat.byHash(hash);
+        let e = cat.byHash(hash);
+        if (!e && (await cat.rescan()) > 0) e = cat.byHash(hash);
         if (e?.usable && (await dirHashFromDisk(e.dir)) === e.hash) hit = { id: e.id, dir: e.dir };
       } else if (this.d.packageDir && (await dirHashFromDisk(this.d.packageDir)) === hash) {
         hit = { id: this.legacyId(this.d.packageDir), dir: this.d.packageDir };
@@ -381,7 +382,8 @@ export class VerifierService {
   }
 
   /** Public catalogue listing (no directories). */
-  packages(): ReturnType<typeof publicEntry>[] {
+  async packages(): Promise<ReturnType<typeof publicEntry>[]> {
+    await this.d.catalogue?.rescan();
     return (this.d.catalogue?.list() ?? []).map(publicEntry);
   }
 

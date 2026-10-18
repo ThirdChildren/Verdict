@@ -140,7 +140,12 @@ export async function scanCatalogue(
         title?: unknown;
         format?: unknown;
       };
-      const id = typeof m.id === "string" && m.id !== "" ? m.id : basename(dir);
+      // A custom package's directory name carries its own hash, so it is the one id that cannot collide.
+      const id = name.startsWith("custom-")
+        ? name
+        : typeof m.id === "string" && m.id !== ""
+          ? m.id
+          : basename(dir);
       out.push({
         id,
         title: resolveTitle(id, m.title, dir),
@@ -206,8 +211,56 @@ export async function intersectWithVerifier(
   }
 }
 
+/**
+ * Hashes `GET <verifier>/v0/packages` lists, polling until `wantHash` appears or `waitMs` has passed. Unlike
+ * intersectWithVerifier this fails closed: unreachable or unreadable means "not listed" (false).
+ */
+export async function verifierLists(
+  verifierUrl: string | undefined,
+  wantHash: string,
+  fetchImpl: typeof fetch = fetch,
+  waitMs = 3000,
+): Promise<boolean> {
+  if (!verifierUrl) return false;
+  const end = Date.now() + waitMs;
+  for (;;) {
+    try {
+      const left = Math.max(200, end - Date.now());
+      const r = await fetchImpl(`${verifierUrl}/v0/packages`, {
+        signal: AbortSignal.timeout(left),
+      });
+      if (r.ok) {
+        const j = (await r.json()) as unknown;
+        const list = Array.isArray(j)
+          ? j
+          : typeof j === "object" && j !== null
+            ? ((j as Record<string, unknown>).packages ?? (j as Record<string, unknown>).types)
+            : undefined;
+        if (Array.isArray(list))
+          for (const x of list) {
+            if (x === wantHash) return true;
+            if (typeof x === "object" && x !== null) {
+              const o = x as Record<string, unknown>;
+              if (
+                o.usable !== false &&
+                ["package_sha256", "sha256", "hash"].some((k) => o[k] === wantHash)
+              )
+                return true;
+            }
+          }
+      }
+    } catch {
+      // not yet
+    }
+    if (Date.now() + 250 >= end) return false;
+    await new Promise((res) => setTimeout(res, 250));
+  }
+}
+
 export class Catalogue {
   private list: readonly PackageEntry[];
+  /** Packages installed at runtime; they survive a late verifier intersection. */
+  private readonly added: PackageEntry[] = [];
   /**
    * @param scanned package directories seen on disk (default: as many as loaded)
    * @param verify retried on first use while it returns a list; null/undefined means "done or unavailable"
@@ -233,12 +286,23 @@ export class Catalogue {
     try {
       const r = await v();
       if (r) {
-        this.list = r;
+        this.list = [...r, ...this.added.filter((a) => !r.some((e) => e.id === a.id))];
         this.pendingVerify = undefined;
       }
     } catch {
       // stays pending
     }
+  }
+  /** Adds a runtime-installed package. Same id with another hash is refused; the same entry again is a no-op. */
+  add(entry: PackageEntry): void {
+    const have = this.list.find((e) => e.id === entry.id);
+    if (have) {
+      if (have.hash !== entry.hash)
+        throw new Error(`The task type ${entry.id} already exists with different contents.`);
+      return;
+    }
+    this.added.push(entry);
+    this.list = [...this.list, entry];
   }
   byId(id: string): PackageEntry | undefined {
     return this.entries.find((e) => e.id === id);

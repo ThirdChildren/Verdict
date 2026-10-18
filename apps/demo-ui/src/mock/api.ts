@@ -9,6 +9,7 @@ import {
   type SignedMandate,
   type TaskList,
 } from "../lib/api.js";
+import { type Draft, type Installed, mockDraft } from "../lib/authoring.js";
 import { fromMinor, toMinor } from "../lib/money.js";
 import { MOCK_TASK_TYPES, type TaskType } from "../lib/taskTypes.js";
 import { type PackageStats, parseStats } from "../lib/verifierApi.js";
@@ -328,4 +329,21 @@ export async function fetchPrincipal(): Promise<{ id: string }> {
 }
 export async function fetchFunds(): Promise<Funds> {
   return { spendable: "50.00", reserved: "1.20", available_to_delegate: "48.80" };
+}
+
+export async function authorTest(request: string): Promise<Draft> {
+  // MOCK DATA: canned drafts by keyword.
+  const d = mockDraft(request);
+  if (!d) throw new ApiError("TASK_NOT_VERIFIABLE", MOCK_REFUSAL_MESSAGE);
+  return d;
+}
+
+export async function installTaskType(draft: Draft): Promise<Installed> {
+  const bytes = new TextEncoder().encode(JSON.stringify(draft));
+  const sha = Array.from(bytes.slice(0, 32), (b) => b.toString(16).padStart(2, "0")).join("");
+  return {
+    id: `custom-${sha.slice(0, 8)}-v1`,
+    package_sha256: sha.padEnd(64, "0"),
+    title: draft.title,
+  };
 }

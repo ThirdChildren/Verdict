@@ -14,9 +14,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, engineBase } from "../lib/api.js";
+import { type Draft, hash8 } from "../lib/authoring.js";
 import { readOnlyReason } from "../lib/mandates.js";
 import { fromMinor, toMinor } from "../lib/money.js";
-import { useRouteRequest, useStartTask, useTaskTypes } from "../lib/queries.js";
+import {
+  useAuthorTest,
+  useInstallTaskType,
+  useRouteRequest,
+  useStartTask,
+  useTaskTypes,
+} from "../lib/queries.js";
 import {
   AMOUNT_STEP,
   amountProblem,
@@ -26,6 +33,7 @@ import {
 } from "../lib/taskText.js";
 import { isUnverifiable, type TaskType, verifierHost } from "../lib/taskTypes.js";
 import { useStore } from "../store.js";
+import { AcceptanceTest, type Edits } from "./AcceptanceTest.js";
 import { Mark } from "./Mark.js";
 
 /** Why a new task cannot start, or null when it can. */
@@ -95,7 +103,27 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const route = useRouteRequest();
   const resetRoute = route.reset;
   const [mapped, setMapped] = useState<{ id: string; reason: string } | null>(null);
-  const list: TaskType[] = types.data?.types ?? [];
+  const author = useAuthorTest();
+  const install = useInstallTaskType();
+  const addTaskType = useStore((s) => s.addTaskType);
+  const addedTypes = useStore((s) => s.addedTypes);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [edits, setEdits] = useState<Edits | null>(null);
+  const [authorError, setAuthorError] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const [installed, setInstalled] = useState<{ id: string; title: string; sha: string } | null>(
+    null,
+  );
+  // The engine's list, plus types installed here or announced by TASK_TYPE_ADDED that the list does not show yet.
+  const fetched: TaskType[] = types.data?.types ?? [];
+  const list: TaskType[] = [
+    ...fetched,
+    ...addedTypes
+      .filter((a) => !fetched.some((t) => t.id === a.id))
+      .map((a) => ({ id: a.id, title: a.title, description: "", format: 1 })),
+  ];
+  const customSha = (id: string): string | undefined =>
+    addedTypes.find((a) => a.id === id)?.package_sha256 || undefined;
   // Default: the first listed type, until the user picks another.
   const selectedType = list.find((t) => t.id === chosen)?.id ?? list[0]?.id ?? null;
   const { reset } = form;
@@ -115,6 +143,11 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setRefusal(null);
       setChosen(null);
       setMapped(null);
+      setDraft(null);
+      setEdits(null);
+      setAuthorError(null);
+      setInstallError(null);
+      setInstalled(null);
       resetRoute();
       reset({
         description: DEFAULT_TASK_DESCRIPTION,
@@ -132,9 +165,44 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setMapped({ id: r.package_id, reason: r.reason });
       setChosen(r.package_id);
     } catch (err) {
-      if (err instanceof ApiError && isUnverifiable(err.code))
+      if (err instanceof ApiError && isUnverifiable(err.code)) {
         setRefusal({ message: err.message, types: err.taskTypes ?? null });
-      else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+        // None matched: offer the way out at once, by writing the acceptance test.
+        void writeTest();
+      } else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+    }
+  };
+  const writeTest = async () => {
+    setAuthorError(null);
+    setInstallError(null);
+    setInstalled(null);
+    try {
+      const d = await author.mutateAsync(description.trim());
+      setDraft(d);
+      setEdits({ title: d.title, description: d.description, visible: d.visible });
+    } catch (err) {
+      setDraft(null);
+      setEdits(null);
+      setAuthorError(
+        err instanceof ApiError ? err.message : "The acceptance test could not be written.",
+      );
+    }
+  };
+  const installDraft = async () => {
+    if (!draft || !edits) return;
+    setInstallError(null);
+    try {
+      // Hidden cases travel inside the draft object; the screen never shows them.
+      const r = await install.mutateAsync({ ...draft, ...edits });
+      const title = r.title?.trim() || edits.title;
+      addTaskType({ id: r.id, title, package_sha256: r.package_sha256 });
+      setInstalled({ id: r.id, title, sha: r.package_sha256 });
+      setChosen(r.id);
+      setDraft(null);
+      setEdits(null);
+      setRefusal(null);
+    } catch (err) {
+      setInstallError(err instanceof ApiError ? err.message : "The test could not be installed.");
     }
   };
   const submit = form.handleSubmit(async (v) => {
@@ -222,6 +290,12 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                         <span>
                           <span className="text-base font-semibold">{t.title}</span>{" "}
                           <span className="font-mono text-sm uppercase text-subtle">{t.id}</span>
+                          {customSha(t.id) && (
+                            <span className="font-mono text-sm text-subtle">
+                              {" "}
+                              custom · {hash8(customSha(t.id) ?? "")}
+                            </span>
+                          )}
                         </span>
                       </label>
                       {t.description && (
@@ -247,6 +321,12 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 <p role="status" className="text-base font-semibold">
                   The buyer agent mapped this to {mapped.id.toUpperCase()}
                   {mapped.reason ? `: ${mapped.reason}` : "."}
+                </p>
+              )}
+              {installed && (
+                <p role="status" className="text-base font-semibold">
+                  Installed: <span className="font-mono">custom · {hash8(installed.sha)}</span>{" "}
+                  {installed.title}. It is selected below.
                 </p>
               )}
               <p id={`${id}-tt`} className="text-base text-subtle">
@@ -317,6 +397,24 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 <p className="text-base">Nothing was sent.</p>
               </div>
             )}
+            {author.isPending && (
+              <p role="status">Writing the acceptance test with the local model...</p>
+            )}
+            {authorError && (
+              <p role="alert" className="font-semibold">
+                {authorError} Nothing was installed.
+              </p>
+            )}
+            {draft && edits && (
+              <AcceptanceTest
+                draft={draft}
+                edits={edits}
+                onEdit={setEdits}
+                onInstall={() => void installDraft()}
+                installing={install.isPending}
+                error={installError}
+              />
+            )}
             {failure && (
               <p
                 role="alert"
@@ -336,6 +434,14 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 disabled={route.isPending || start.isPending || description.trim().length < 3}
               >
                 {route.isPending ? "Checking..." : "Check"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void writeTest()}
+                disabled={author.isPending || start.isPending || description.trim().length < 3}
+              >
+                {author.isPending ? "Writing..." : "Write a test"}
               </Button>
               <Button type="submit" disabled={start.isPending || selectedType === null}>
                 {start.isPending ? "Sending..." : "Start task"}

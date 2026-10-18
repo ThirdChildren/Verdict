@@ -57,7 +57,70 @@ export async function describePackage(
 }
 
 export class Catalogue {
+  /** Set only by fromRoot: where to look for packages installed after startup. */
+  private root: string | null = null;
+  private allow: Set<string> | undefined;
+  private warn: (msg: string) => void = (m) => console.warn(`[verifier] ${m}`);
+  private lastScan = Number.NEGATIVE_INFINITY;
+  private scanning: Promise<number> | null = null;
+  /** Minimum gap between two rescans of the packages root. */
+  static readonly RESCAN_MIN_MS = 2000;
+  now: () => number = () => Date.now();
+  /** Number of rescans that actually walked the disk (tests, diagnostics). */
+  rescans = 0;
+
   constructor(private readonly entries: CatalogueEntry[]) {}
+
+  /**
+   * Adopt directories that appeared under the root since the last look. New directories only: a known directory whose
+   * hash changed is never re-described (it stays refused by the drift check). Debounced; a no-op for a single-dir catalogue.
+   * Returns how many packages were adopted.
+   */
+  async rescan(): Promise<number> {
+    if (!this.root) return 0;
+    if (this.scanning) return this.scanning;
+    const t = this.now();
+    if (t - this.lastScan < Catalogue.RESCAN_MIN_MS) return 0;
+    this.lastScan = t;
+    this.rescans++;
+    this.scanning = this.doRescan(this.root).finally(() => {
+      this.scanning = null;
+    });
+    return this.scanning;
+  }
+
+  private async doRescan(base: string): Promise<number> {
+    let adopted = 0;
+    let names: string[];
+    try {
+      names = readdirSync(base).sort();
+    } catch {
+      return 0;
+    }
+    const dirs = new Set(this.entries.map((e) => e.dir));
+    for (const name of names) {
+      if (name === "_judge" || name.startsWith(".")) continue;
+      const dir = join(base, name);
+      if (dirs.has(dir)) continue;
+      try {
+        const st = lstatSync(dir);
+        if (st.isSymbolicLink() || !st.isDirectory()) continue;
+        const e = await describePackage(dir, this.allow);
+        if (this.entries.some((x) => x.id === e.id)) {
+          this.warn(`skipping ${dir}: duplicate package id "${e.id}"`);
+          continue;
+        }
+        this.entries.push(e);
+        adopted++;
+        console.log(
+          `[verifier] adopted new package ${e.id} ${e.hash}${e.usable ? "" : " (unusable)"}`,
+        );
+      } catch (err) {
+        this.warn(`skipping ${dir}: ${(err as Error).message}`);
+      }
+    }
+    return adopted;
+  }
 
   static async fromRoot(
     root: string,
@@ -86,7 +149,11 @@ export class Catalogue {
       if (seen.has(e.id)) throw new Error(`Duplicate verifier package id "${e.id}" in ${base}.`);
       seen.add(e.id);
     }
-    return new Catalogue(out);
+    const c = new Catalogue(out);
+    c.root = base;
+    c.allow = allow;
+    c.warn = warn;
+    return c;
   }
 
   /** VERIFIER_PACKAGE_DIR: the catalogue is that one package. */

@@ -1,0 +1,34 @@
+{
+  "cases": [
+    { "request": "Write a script that sums two numbers read from a file", "label": "cli" },
+    { "request": "A command line tool that counts the words in a text file", "label": "cli" },
+    { "request": "Filter a CSV file and print only the column named email", "label": "cli" },
+    { "request": "Reformat dates from DD/MM/YYYY to YYYY-MM-DD, one per line", "label": "cli" },
+    {
+      "request": "Convert temperatures from Celsius to Fahrenheit, one number per line",
+      "label": "cli"
+    },
+    {
+      "request": "Remove duplicate lines from a text file, keeping the first occurrence",
+      "label": "cli"
+    },
+    { "request": "Extract the field \"name\" from a JSON file and print it", "label": "cli" },
+    { "request": "Convert integers to Roman numerals, one per line", "label": "cli" },
+    { "request": "Write a snake game", "label": "reframe" },
+    { "request": "Make a tic-tac-toe game", "label": "reframe" },
+    { "request": "Build a todo web app", "label": "reframe" },
+    { "request": "Create a calculator UI", "label": "reframe" },
+    { "request": "Write a pong game", "label": "reframe" },
+    { "request": "Build a login form", "label": "reframe" },
+    { "request": "Write a chess move validator", "label": "reframe" },
+    { "request": "Implement the 2048 game", "label": "reframe" },
+    { "request": "Write a blog post about remote work", "label": "none" },
+    { "request": "Translate this document into French", "label": "none" },
+    { "request": "Do market research on electric bikes", "label": "none" },
+    { "request": "Design a logo for my bakery", "label": "none" },
+    { "request": "Is Bitcoin a good investment?", "label": "none" },
+    { "request": "Summarise this research paper for me", "label": "none" },
+    { "request": "Scrape product prices from a shop website", "label": "none" },
+    { "request": "Write my CV", "label": "none" }
+  ]
+}

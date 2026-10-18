@@ -52,7 +52,7 @@ export function buildServer(opts: VerifierServerOptions = {}): FastifyInstance {
       }
       return entry;
     });
-    app.get("/v0/packages", async () => ({ packages: service.packages() }));
+    app.get("/v0/packages", async () => ({ packages: await service.packages() }));
     app.get("/v0/stats", async () => service.stats());
   }
   if (info) app.get("/v0/info", async () => info());

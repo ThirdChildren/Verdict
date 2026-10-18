@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -465,6 +473,73 @@ describe("package catalogue (E31 AC13)", () => {
     expect(
       (await deposit(ctx, { packageSha: await dirHashFromDisk(JSON_PKG) })).answer,
     ).toMatchObject({ ok: true });
+  });
+});
+
+describe("catalogue rescan (E33)", () => {
+  const SRC = resolve(__dirname, "../../../verifier-packages/json-normalise-v1");
+  const mkRoot = () => {
+    const root = mkdtempSync(join(scratch, "rescan-"));
+    cpSync(SRC, join(root, "json-normalise-v1"), { recursive: true });
+    return root;
+  };
+  const install = (root: string, name: string) => {
+    cpSync(SRC, join(root, name), { recursive: true });
+    const mp = join(root, name, "manifest.json");
+    const m = JSON.parse(readFileSync(mp, "utf8"));
+    m.id = name;
+    writeFileSync(mp, JSON.stringify(m));
+    return dirHashFromDisk(join(root, name));
+  };
+  it("adopts a package created after startup, lists it, and debounces misses", async () => {
+    const root = mkRoot();
+    const cat = await Catalogue.fromRoot(root);
+    let t = 10_000;
+    cat.now = () => t;
+    const ctx = await setup({ catalogue: cat });
+    const hash = await install(root, "late-pkg-v1");
+    const miss = "c".repeat(64);
+    expect((await deposit(ctx, { packageSha: miss })).answer).toMatchObject({ ok: false });
+    expect(cat.rescans).toBe(1);
+    // the first miss already adopted it; a second miss within 2 s does not rescan
+    expect((await deposit(ctx, { packageSha: "d".repeat(64) })).answer).toMatchObject({
+      ok: false,
+    });
+    expect(cat.rescans).toBe(1);
+    expect(cat.byHash(hash)?.id).toBe("late-pkg-v1");
+    expect((await ctx.service.packages()).map((p) => p.id)).toContain("late-pkg-v1");
+    expect(cat.rescans).toBe(1);
+    t += 2001;
+    await ctx.service.packages();
+    expect(cat.rescans).toBe(2);
+  });
+  it("resolves a late package straight from P_DEPOSIT", async () => {
+    const root = mkRoot();
+    const cat = await Catalogue.fromRoot(root);
+    const ctx = await setup({ catalogue: cat });
+    const hash = await install(root, "late2-v1");
+    expect((await deposit(ctx, { packageSha: hash })).answer).toMatchObject({ ok: true });
+  });
+  it("a changed known package stays refused", async () => {
+    const root = mkRoot();
+    const cat = await Catalogue.fromRoot(root);
+    const hash = (cat.list()[0] as { hash: string }).hash;
+    writeFileSync(join(root, "json-normalise-v1", "extra.txt"), "drift");
+    cat.now = () => 1e9;
+    await cat.rescan();
+    expect(cat.size).toBe(1);
+    const ctx = await setup({ catalogue: cat });
+    expect((await deposit(ctx, { packageSha: hash })).answer).toMatchObject({
+      ok: false,
+      code: "PACKAGE_HASH_MISMATCH",
+    });
+  });
+  it("the single-dir catalogue never rescans", async () => {
+    const cat = await Catalogue.fromDir(SRC);
+    expect(await cat.rescan()).toBe(0);
+    const ctx = await setup({ catalogue: cat });
+    await deposit(ctx, { packageSha: "e".repeat(64) });
+    expect(cat.rescans).toBe(0);
   });
 });
 

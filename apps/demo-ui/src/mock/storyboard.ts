@@ -240,5 +240,10 @@ export const SCENES: Scene[] = [
       },
     ],
   },
+  {
+    id: "author",
+    label: '16 · Write a test (open NEW TASK, goal "sum two numbers", WRITE A TEST)',
+    events: upto(state("CLAIMED")),
+  },
 ];
 export const PLAY = "play";

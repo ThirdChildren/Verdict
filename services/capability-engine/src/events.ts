@@ -30,9 +30,18 @@ export interface TaskRefusedEvent {
   data: { reason: string; task_types: string[] };
 }
 
+/** Not part of the frozen protocol, UI only: a custom test package was installed and the verifier lists it. */
+export interface TaskTypeAddedEvent {
+  seq: number;
+  at: string;
+  type: "TASK_TYPE_ADDED";
+  data: { id: string; title: string; package_sha256: string };
+}
+
 export type EngineEvent =
   | UiEvent
   | TaskRefusedEvent
+  | TaskTypeAddedEvent
   | DemoMineProgressEvent
   | WorkerStatusEvent
   | MandateRetiredEvent;

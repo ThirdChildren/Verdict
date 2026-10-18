@@ -1,5 +1,14 @@
 import { type LlmClient, LlmError, LlmTimeoutError } from "@verdict/llm";
 import type { SpendIntent } from "@verdict/protocol";
+import type { z } from "zod";
+import {
+  AUTHOR_SYSTEM,
+  type AuthorDraft,
+  authorSchema,
+  cleanDraft,
+  DraftError,
+  NOT_VERIFIABLE_TEXT,
+} from "./author.js";
 import type { WorkerDirectory } from "./identities.js";
 import {
   amountsInText,
@@ -27,7 +36,8 @@ export class AgentError extends Error {
       | "LLM_TIMEOUT"
       | "AMOUNT_NOT_IN_GOAL"
       | "COUNTERPARTY_NOT_ALLOWED"
-      | "TASK_NOT_VERIFIABLE",
+      | "TASK_NOT_VERIFIABLE"
+      | "AUTHOR_FAILED",
     message: string,
   ) {
     super(message);
@@ -49,6 +59,7 @@ export type AgentConfig = {
 };
 
 export const ROUTE_TIMEOUT_MS = 30_000;
+export const AUTHOR_TIMEOUT_MS = 90_000;
 
 export type Route = { package_id: string; reason: string };
 
@@ -128,6 +139,49 @@ export class BuyerAgent {
         `Verdict only buys work it can verify. Task types today: ${types.map((t) => t.title ?? t.id).join("; ")}. Nothing was sent.`,
       );
     return r;
+  }
+
+  /** E33: one structured call drafts an acceptance test. `none` throws TASK_NOT_VERIFIABLE; nothing is installed here. */
+  async author(request: string): Promise<{
+    feasibility: "cli" | "reframe";
+    reason: string;
+    reframe?: string;
+    draft: AuthorDraft;
+  }> {
+    const failed = (why: string) =>
+      new AgentError(
+        "AUTHOR_FAILED",
+        `I could not write a usable test for this request (${why}). Nothing was installed.`,
+      );
+    let v: z.infer<typeof authorSchema>;
+    try {
+      v = (
+        await this.cfg.llm.structured(
+          authorSchema,
+          [
+            { role: "system", content: AUTHOR_SYSTEM },
+            { role: "user", content: `Request: ${request}` },
+          ],
+          { name: "author", maxTokens: 4000, timeoutMs: timeoutFor(this.cfg, AUTHOR_TIMEOUT_MS) },
+        )
+      ).value;
+    } catch (err) {
+      if (err instanceof LlmTimeoutError) throw failed("the local model took too long");
+      if (err instanceof LlmError) throw failed("the model's answer was not a valid test");
+      throw err;
+    }
+    if (v.feasibility === "none") throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
+    try {
+      return {
+        feasibility: v.feasibility,
+        reason: v.reason,
+        ...(v.reframe !== undefined ? { reframe: v.reframe } : {}),
+        draft: cleanDraft(v),
+      };
+    } catch (err) {
+      if (err instanceof DraftError) throw failed(err.message);
+      throw err;
+    }
   }
 
   async planIntentWithThinking(

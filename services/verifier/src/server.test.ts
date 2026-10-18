@@ -45,3 +45,19 @@ test("GET /v0/packages lists the catalogue without directories", async () => {
   expect(res.json()).toEqual({ packages: pkgs });
   await app.close();
 });
+
+test("GET /v0/packages awaits the async service listing (both packages)", async () => {
+  const pkgs = [
+    { id: "a", hash: "a".repeat(64), format: 1, profile: null, usable: true },
+    { id: "b", hash: "b".repeat(64), format: 2, profile: "standard", usable: true },
+  ];
+  const service = {
+    reports: () => [],
+    packages: async () => pkgs,
+  } as unknown as VerifierService;
+  const app = buildServer({ logger: false, service });
+  const res = await app.inject({ method: "GET", url: "/v0/packages" });
+  expect(res.json()).toEqual({ packages: pkgs });
+  expect(res.json().packages).toHaveLength(2);
+  await app.close();
+});

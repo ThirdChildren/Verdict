@@ -279,3 +279,131 @@ describe("task type list and refusal", () => {
     expect(within(alert).getByText(/docs\/FAQ\.md/)).toBeTruthy();
   });
 });
+
+describe("NewTaskButton acceptance test", () => {
+  const draft = (over: Record<string, unknown> = {}) => ({
+    feasibility: "cli",
+    reason: "checkable",
+    title: "Sum two numbers",
+    description: "Print the sum.",
+    entry: "main.py",
+    input_ext: "txt",
+    visible: [
+      { input: "1 2", expected: "3" },
+      { input: "2 2", expected: "4" },
+      { input: "0 0", expected: "0" },
+    ],
+    hidden: [1, 2, 3, 4, 5].map((n) => ({ input: `${n} 0`, expected: `${n}` })),
+    assertions: ["One number, nothing else."],
+    ...over,
+  });
+  const authorBody = (top: Record<string, unknown> = {}) => {
+    const { feasibility, reason, ...rest } = draft();
+    return json(200, { ok: true, feasibility, reason, ...top, draft: rest });
+  };
+  const stub = (author: () => Promise<Response>, install: () => Promise<Response>) => {
+    const posted: { url: string; body: string }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method !== "POST") return json(200, { task_types: MOCK_TASK_TYPES });
+        posted.push({ url, body: String(init.body) });
+        if (url.endsWith("/api/route"))
+          return json(422, { ok: false, code: "TASK_NOT_VERIFIABLE", message: "No type matches." });
+        return url.endsWith("/api/author") ? author() : install();
+      }),
+    );
+    return posted;
+  };
+  const fill = async (d: HTMLElement, text: string) => {
+    fireEvent.change(within(d).getByLabelText(/what should the worker do/i), {
+      target: { value: text },
+    });
+  };
+
+  it("shows the panel after a Check that answers none, hidden cases stay out of sight", async () => {
+    stub(
+      () => authorBody(),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    await fill(d, "sum two numbers");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    const panel = await within(d).findByRole("region", { name: /acceptance test/i });
+    expect(within(panel).getByText(/reads a file and prints a result/)).toBeTruthy();
+    expect(within(panel).getByText(/5 more cases stay hidden from the worker/)).toBeTruthy();
+    expect(within(panel).getByText("One number, nothing else.")).toBeTruthy();
+    expect(within(panel).getAllByRole("textbox")).toHaveLength(2 + 6);
+  });
+  it("shows the reframe sentence", async () => {
+    stub(
+      () =>
+        authorBody({ feasibility: "reframe", reframe: "A game cannot be tested; its score can." }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    await fill(d, "snake game");
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    expect(await within(d).findByText("A game cannot be tested; its score can.")).toBeTruthy();
+  });
+  it("sends an edited visible case, installs and selects the new type", async () => {
+    const posted = stub(
+      () => authorBody(),
+      () =>
+        json(200, {
+          ok: true,
+          id: "custom-ab12cd34-v1",
+          package_sha256: "ab12cd34".repeat(8),
+          title: "Sum two numbers",
+        }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    const cell = await within(d).findByLabelText("Case 1 expected output");
+    fireEvent.change(cell, { target: { value: "99" } });
+    fireEvent.click(within(d).getByRole("button", { name: /install test and use it/i }));
+    expect(
+      (await within(d).findAllByText(/custom · ab12cd34/, { selector: "span.font-mono" }))[0],
+    ).toBeTruthy();
+    const sent = JSON.parse(posted.find((p) => p.url.endsWith("/api/task-types"))?.body ?? "{}");
+    expect(sent.draft.visible[0].expected).toBe("99");
+    expect(sent.draft.hidden).toHaveLength(5);
+    const radios = await within(d).findAllByRole("radio");
+    const picked = radios.find((r) => (r as HTMLInputElement).checked);
+    expect((picked as HTMLInputElement).value).toBe("custom-ab12cd34-v1");
+    expect(within(d).queryByRole("region", { name: /acceptance test/i })).toBeNull();
+  });
+  it("renders DRAFT_REJECTED in place and keeps the panel", async () => {
+    stub(
+      () => authorBody(),
+      () =>
+        json(422, {
+          ok: false,
+          code: "DRAFT_REJECTED",
+          message: "Every expected output is the same.",
+        }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    fireEvent.click(within(d).getByRole("button", { name: /install test and use it/i }));
+    expect(await within(d).findByText("Every expected output is the same.")).toBeTruthy();
+    expect(within(d).getByRole("region", { name: /acceptance test/i })).toBeTruthy();
+  });
+  it("renders an authoring refusal in place", async () => {
+    stub(
+      () =>
+        json(422, {
+          ok: false,
+          code: "TASK_NOT_VERIFIABLE",
+          message: "A blog post cannot be tested.",
+        }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    expect(
+      await within(d).findByText(/A blog post cannot be tested\. Nothing was installed/),
+    ).toBeTruthy();
+  });
+});

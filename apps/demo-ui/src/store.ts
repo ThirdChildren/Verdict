@@ -9,6 +9,7 @@ import type {
 } from "@verdict/protocol";
 import { capabilityHash } from "@verdict/protocol";
 import { create } from "zustand";
+import type { TaskTypeAdded } from "./lib/authoring.js";
 import type { MandateRow } from "./lib/mandates.js";
 import type { MineProgress } from "./lib/mine.js";
 import { precisionOf } from "./lib/money.js";
@@ -117,6 +118,8 @@ export interface AppState {
   principal: PrincipalState;
   /** Requests refused as not verifiable (engine TASK_REFUSED, outside the protocol event stream), newest first. */
   refusals: TaskRefusal[];
+  /** Task types installed from this screen or announced by the engine (TASK_TYPE_ADDED), newest first. */
+  addedTypes: TaskTypeAdded[];
 }
 
 export const initialState: AppState = {
@@ -148,6 +151,7 @@ export const initialState: AppState = {
   capParents: {},
   principal: { status: "disconnected" },
   refusals: [],
+  addedTypes: [],
 };
 
 const lazyRow = (hash: string, order: number): MandateRow => ({
@@ -380,6 +384,7 @@ interface Actions {
   setMine: (p: MineProgress) => void;
   retire: (r: MandateRetired) => void;
   refuse: (r: TaskRefusal) => void;
+  addTaskType: (t: TaskTypeAdded) => void;
   /** Rebuilds the mandate map and the task -> mandate links from the API (newest mandate first). */
   hydrate: (rows: MandateRow[], taskRoots: Record<string, string>) => void;
   selectMandate: (hash: string) => void;
@@ -411,6 +416,8 @@ export const useStore = create<AppState & Actions>((set) => ({
       };
     }),
   refuse: (r) => set((s) => ({ refusals: [r, ...s.refusals].slice(0, 20) })),
+  addTaskType: (t) =>
+    set((s) => ({ addedTypes: [t, ...s.addedTypes.filter((x) => x.id !== t.id)].slice(0, 50) })),
   hydrate: (rows, taskRoots) =>
     set((s) => {
       const mandates = new Map<string, MandateRow>();

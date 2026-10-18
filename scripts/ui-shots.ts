@@ -150,6 +150,16 @@ const EXTRAS: Extra[] = [
       await p.getByRole("button", { name: "More" }).click();
     },
   },
+  {
+    id: "author",
+    scene: "author",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^new task$/i }).click();
+      await p.getByLabel(/what should the worker do/i).fill("sum two numbers");
+      await p.getByRole("button", { name: /write a test/i }).click();
+      await p.getByRole("region", { name: /acceptance test/i }).waitFor();
+    },
+  },
   { id: "wizard-signed", scene: "empty", act: (p) => wizard(p, EXAMPLE, 2) },
   // Mandate history: select the retired mandate (frozen figures, read-only NEW TASK).
   {

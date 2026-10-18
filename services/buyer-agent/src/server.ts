@@ -72,7 +72,9 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
   const guard = (reply: { code(n: number): unknown }, err: unknown) => {
     if (err instanceof AgentError) {
       reply.code(
-        err.code === "AMOUNT_NOT_IN_GOAL" || err.code === "TASK_NOT_VERIFIABLE"
+        err.code === "AMOUNT_NOT_IN_GOAL" ||
+          err.code === "TASK_NOT_VERIFIABLE" ||
+          err.code === "AUTHOR_FAILED"
           ? 422
           : err.code === "COUNTERPARTY_NOT_ALLOWED"
             ? 403
@@ -140,6 +142,32 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           task_types: types.map((t) => ({ id: t.id, title: t.title ?? t.id })),
         };
       }
+      return guard(reply, err);
+    }
+  });
+
+  // E33: draft an acceptance test for a request. The model only proposes; the engine validates and installs.
+  app.post("/api/author", async (req, reply) => {
+    const body = z
+      .object({ request: z.string().min(3).max(1000) })
+      .strict()
+      .safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        ok: false,
+        code: "BAD_REQUEST",
+        message: "Please describe the task in a sentence.",
+      });
+    if (!agent)
+      return reply
+        .code(503)
+        .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
+    try {
+      const r = await agent.author(body.data.request);
+      emit("author.drafted", { feasibility: r.feasibility, title: r.draft.title });
+      return { ok: true, ...r };
+    } catch (err) {
+      emit("author.failed", { message: failMessage(err) });
       return guard(reply, err);
     }
   });

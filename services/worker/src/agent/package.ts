@@ -50,8 +50,17 @@ export async function resolvePackageDir(
   sha256: string,
   root = packagesRoot(),
 ): Promise<string | null> {
-  return (await packageMap(root)).get(sha256) ?? null;
+  const hit = (await packageMap(root)).get(sha256);
+  if (hit) return hit;
+  // A package installed after startup: rescan once per RESCAN_MIN_MS, then look again.
+  const now = Date.now();
+  if (now - (lastRescan.get(root) ?? Number.NEGATIVE_INFINITY) < RESCAN_MIN_MS) return null;
+  lastRescan.set(root, now);
+  return (await packageMap(root, true)).get(sha256) ?? null;
 }
+
+export const RESCAN_MIN_MS = 2000;
+const lastRescan = new Map<string, number>();
 
 export interface Manifest {
   format?: number;
