@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { defaultUiOrigins, listenHost } from "@verdict/http-local";
 import { loadLlm } from "@verdict/llm";
-import { dirHashFromDisk } from "@verdict/protocol/node";
 import {
   assertEip191VerifierForMode,
   dataDir,
@@ -13,8 +12,8 @@ import {
   WalletClient,
 } from "@verdict/wallet";
 import { DEFAULT_MAX_TOKENS, llmGenerator } from "./agent/generate.js";
-import { loadPackageTask } from "./agent/package.js";
-import { DEFAULT_PACKAGE_DIR, localSelfCheck } from "./agent/selfcheck.js";
+import { loadPackageTask, resolvePackageDir } from "./agent/package.js";
+import { localSelfCheck } from "./agent/selfcheck.js";
 import { WorkerNode } from "./node/node.js";
 import { buildServer, LAN_ROUTES, SERVICE } from "./server.js";
 import { eip191SignerFromSeed } from "./signer.js";
@@ -27,7 +26,6 @@ const lo = {
   uiOrigins: defaultUiOrigins(),
   ...(lanBind ? { lanBind, lanRoutes: LAN_ROUTES } : {}),
 };
-const packageDir = process.env.VERIFIER_PACKAGE_DIR ?? DEFAULT_PACKAGE_DIR;
 const model = process.env.WORKER_MODEL ?? "QWEN3_5_9B_MULTIMODAL_Q4_K_M";
 
 // Demo switch for the FAIL -> refund scene; the UI flips it through POST /v0/config. Never on by default.
@@ -62,9 +60,9 @@ try {
     assetId: net.tusd_asset_id,
     precision: net.tusd_precision,
     // Format-2 packages drive the prompt from their manifest; csv2json-v1 keeps its measured prompt.
-    generator: llmGenerator(llm, maxTokens, loadPackageTask(packageDir)),
-    check: localSelfCheck({ packageDir }),
-    packageSha256: () => dirHashFromDisk(packageDir),
+    generatorFor: (dir) => llmGenerator(llm, maxTokens, loadPackageTask(dir)),
+    checkFor: (dir) => localSelfCheck({ packageDir: dir }),
+    resolvePackageDir: (sha) => resolvePackageDir(sha),
     sabotaged: () => sabotaged,
     disappears: () => disappears,
     verifierId: ids.verifier,

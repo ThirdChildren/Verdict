@@ -27,6 +27,12 @@ export const llmIntentSchema = z
     (i) => i.recurring === (i.interval !== "none"),
     "recurring must be true exactly when interval is not none",
   );
+/** Routing answer: one catalogue id or "none" (abstain). The enum is built from the live catalogue. */
+export function routeSchema(ids: string[]) {
+  const values: [string, ...string[]] = ["none", ...ids];
+  return z.object({ package_id: z.enum(values), reason: z.string().min(1).max(300) }).strict();
+}
+
 export type LlmIntent = z.infer<typeof llmIntentSchema>;
 
 export const llmMandateSchema = z

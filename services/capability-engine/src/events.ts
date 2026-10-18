@@ -22,7 +22,20 @@ export interface MandateRetiredEvent {
   reason: string;
 }
 
-export type EngineEvent = UiEvent | DemoMineProgressEvent | WorkerStatusEvent | MandateRetiredEvent;
+/** Not part of the frozen protocol, UI only: a task request was refused before anything was registered or signed. */
+export interface TaskRefusedEvent {
+  seq: number;
+  at: string;
+  type: "TASK_REFUSED";
+  data: { reason: string; task_types: string[] };
+}
+
+export type EngineEvent =
+  | UiEvent
+  | TaskRefusedEvent
+  | DemoMineProgressEvent
+  | WorkerStatusEvent
+  | MandateRetiredEvent;
 type Listener = (e: EngineEvent) => void;
 type Distribute<T> = T extends { seq: number } ? Omit<T, "seq" | "at"> : never;
 

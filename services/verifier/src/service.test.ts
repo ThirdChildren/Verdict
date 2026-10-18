@@ -17,6 +17,7 @@ import {
 } from "@verdict/protocol";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { afterAll, describe, expect, it } from "vitest";
+import { Catalogue } from "./catalogue.js";
 import { buildEnvelope } from "./envelope.js";
 import { Registry } from "./registry.js";
 import { detectSandbox, type RunOptions, type RunResult } from "./runner.js";
@@ -36,7 +37,13 @@ interface Sent {
   env: Record<string, unknown> & { type: string; body: Record<string, unknown> };
 }
 
-async function setup(opts: { run?: (o: RunOptions) => Promise<RunResult> } = {}) {
+async function setup(
+  opts: {
+    run?: (o: RunOptions) => Promise<RunResult>;
+    catalogue?: Catalogue;
+    packageDir?: string;
+  } = {},
+) {
   const seed = new Uint8Array(32).fill(7);
   const verifier = await createEd25519Signer(seed);
   const engine = await createEd25519Signer(new Uint8Array(32).fill(1));
@@ -49,7 +56,7 @@ async function setup(opts: { run?: (o: RunOptions) => Promise<RunResult> } = {})
   const service = new VerifierService({
     signer: verifier,
     seed,
-    packageDir: PKG,
+    ...(opts.catalogue ? { catalogue: opts.catalogue } : { packageDir: opts.packageDir ?? PKG }),
     registry: new Registry(null),
     engineId: engine.publicId,
     engineUrl: ENGINE_URL,
@@ -399,5 +406,52 @@ describe("RunReport.v2 and /v0/stats", () => {
       mean_score: 83.33,
       determinism_rate: 1,
     });
+  });
+});
+
+describe("package catalogue (E31 AC13)", () => {
+  const ROOT = resolve(__dirname, "../../../verifier-packages");
+  const JSON_PKG = join(ROOT, "json-normalise-v1");
+
+  it("deposits a contract naming any package under the root", async () => {
+    const catalogue = await Catalogue.fromRoot(ROOT);
+    expect(catalogue.list().map((e) => e.id)).toEqual(
+      expect.arrayContaining(["csv2json-v1", "json-normalise-v1"]),
+    );
+    expect(catalogue.list().some((e) => e.id === "_judge")).toBe(false);
+    const ctx = await setup({ catalogue });
+    for (const e of catalogue.list().filter((x) => x.usable)) {
+      const d = await deposit(ctx, { packageSha: e.hash });
+      expect(d.answer).toMatchObject({ ok: true });
+    }
+  });
+
+  it("refuses an unknown hash without listing anything", async () => {
+    const ctx = await setup({ catalogue: await Catalogue.fromRoot(ROOT) });
+    const d = await deposit(ctx, { packageSha: "b".repeat(64) });
+    expect(d.answer).toMatchObject({ ok: false, code: "PACKAGE_HASH_MISMATCH" });
+    expect(JSON.stringify(d.answer)).not.toContain(ROOT);
+  });
+
+  it("lists a package whose judge is not allow-listed as unusable and refuses it", async () => {
+    const catalogue = await Catalogue.fromRoot(ROOT, new Set());
+    const e = catalogue.list().find((x) => x.id === "json-normalise-v1");
+    expect(e).toMatchObject({ format: 2, usable: false });
+    const ctx = await setup({ catalogue });
+    const d = await deposit(ctx, { packageSha: (e as { hash: string }).hash });
+    expect(d.answer).toMatchObject({ ok: false, code: "PACKAGE_HASH_MISMATCH" });
+  });
+
+  it("VERIFIER_PACKAGE_DIR style single package: only that hash is served", async () => {
+    const catalogue = await Catalogue.fromDir(JSON_PKG);
+    expect(catalogue.size).toBe(1);
+    const ctx = await setup({ catalogue });
+    expect((await deposit(ctx, { packageSha: await dirHashFromDisk(PKG) })).answer).toMatchObject({
+      ok: false,
+      code: "PACKAGE_HASH_MISMATCH",
+    });
+    expect(
+      (await deposit(ctx, { packageSha: await dirHashFromDisk(JSON_PKG) })).answer,
+    ).toMatchObject({ ok: true });
   });
 });

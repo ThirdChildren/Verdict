@@ -19,6 +19,7 @@ import {
   verifyPayload,
 } from "@verdict/protocol";
 import { dirHashFromDisk } from "@verdict/protocol/node";
+import { type Catalogue, publicEntry } from "./catalogue.js";
 import { buildEnvelope, checkEnvelope } from "./envelope.js";
 import { MAX_COMPRESSED_BYTES } from "./extract.js";
 import type { Registry, RunReport, RunReportV2, TaskEntry } from "./registry.js";
@@ -34,7 +35,9 @@ export interface VerifierDeps {
   signer: Signer;
   /** Ed25519 seed. Opens sealed preimages (converted to X25519) only while a check or a release needs it. */
   seed: Uint8Array;
-  packageDir: string;
+  /** Single package (tests, legacy). Ignored when `catalogue` is given. */
+  packageDir?: string;
+  catalogue?: Catalogue;
   registry: Registry;
   engineId: string;
   engineUrl: string;
@@ -125,19 +128,10 @@ export class VerifierService {
       await this.confirm(existing);
       return { ok: true, detail: "already deposited" };
     }
-    let packageSha: string;
-    try {
-      packageSha = await dirHashFromDisk(this.d.packageDir);
-    } catch (e) {
+    if (!(await this.resolvePackage(contract.verifier.package_sha256)))
       return refuse(
         "PACKAGE_HASH_MISMATCH",
-        `the local verifier package is unreadable (${(e as Error).message})`,
-      );
-    }
-    if (packageSha !== contract.verifier.package_sha256)
-      return refuse(
-        "PACKAGE_HASH_MISMATCH",
-        "the verifier package on this machine is not the one the contract names",
+        "the verifier package the contract names is not one this verifier serves",
       );
     try {
       const p = await openPreimage(sealed_preimage, this.d.seed);
@@ -151,7 +145,7 @@ export class VerifierService {
       payment_hash: contract.payment.payment_hash,
       contract,
       sealed_preimage,
-      package_sha256: packageSha,
+      package_sha256: contract.verifier.package_sha256,
       reports: [],
       released: false,
     };
@@ -213,11 +207,8 @@ export class VerifierService {
           "Delivery rejected: Bundle larger than 1 MB compressed",
         );
       writeFileSync(tarball, Buffer.from(bundleB64, "base64"));
-      const packageOk = await dirHashFromDisk(this.d.packageDir).then(
-        (h) => h === c.verifier.package_sha256,
-        () => false,
-      );
-      if (!packageOk)
+      const pkg = await this.resolvePackage(c.verifier.package_sha256);
+      if (!pkg)
         return withhold(
           "PACKAGE_HASH_MISMATCH",
           "The verifier package no longer matches the contract.",
@@ -234,7 +225,7 @@ export class VerifierService {
           "The delivery does not match the hash the worker announced.",
         );
       return await (this.d.run ?? runVerification)({
-        packageDir: this.d.packageDir,
+        packageDir: pkg.dir,
         deliveryDir: dest,
         maxVerifySeconds: c.task.max_verify_seconds,
         expectedDeliverySha256: announced,
@@ -294,10 +285,10 @@ export class VerifierService {
       ].slice(-20),
       verify_sh_sha256: (() => {
         try {
-          return sha256File(join(this.d.packageDir, "verify.sh"));
+          return sha256File(join(this.dirOf(t.package_sha256), "verify.sh"));
         } catch {
           try {
-            return sha256File(join(this.d.packageDir, "verify.mjs"));
+            return sha256File(join(this.dirOf(t.package_sha256), "verify.mjs"));
           } catch {
             return "unreadable";
           }
@@ -328,7 +319,7 @@ export class VerifierService {
   ): RunReportV2 {
     return {
       package_sha256: t.package_sha256,
-      package_id: r.packageId ?? this.packageId(),
+      package_id: r.packageId ?? this.packageId(t.package_sha256),
       profile: r.profile ?? null,
       score: r.score ?? null,
       min_score: r.min_score ?? null,
@@ -348,15 +339,50 @@ export class VerifierService {
     };
   }
 
-  private packageId(): string | null {
+  /** Packages resolved so far in this process, by contract hash (report evidence). */
+  private readonly known = new Map<string, { id: string; dir: string }>();
+
+  /**
+   * The package the contract names, or null: unknown hash, unusable package, or a directory that no longer hashes to
+   * what was catalogued (drift).
+   */
+  private async resolvePackage(hash: string): Promise<{ id: string; dir: string } | null> {
+    const cat = this.d.catalogue;
+    let hit: { id: string; dir: string } | null = null;
     try {
-      const m = JSON.parse(readFileSync(join(this.d.packageDir, "manifest.json"), "utf8")) as {
-        id?: unknown;
-      };
-      return typeof m.id === "string" ? m.id : basename(this.d.packageDir);
+      if (cat) {
+        const e = cat.byHash(hash);
+        if (e?.usable && (await dirHashFromDisk(e.dir)) === e.hash) hit = { id: e.id, dir: e.dir };
+      } else if (this.d.packageDir && (await dirHashFromDisk(this.d.packageDir)) === hash) {
+        hit = { id: this.legacyId(this.d.packageDir), dir: this.d.packageDir };
+      }
     } catch {
-      return basename(this.d.packageDir);
+      hit = null;
     }
+    if (hit) this.known.set(hash, hit);
+    return hit;
+  }
+
+  private dirOf(hash: string): string {
+    return this.known.get(hash)?.dir ?? this.d.packageDir ?? "";
+  }
+
+  private packageId(hash: string): string | null {
+    return this.known.get(hash)?.id ?? null;
+  }
+
+  private legacyId(dir: string): string {
+    try {
+      const m = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as { id?: unknown };
+      return typeof m.id === "string" ? m.id : basename(dir);
+    } catch {
+      return basename(dir);
+    }
+  }
+
+  /** Public catalogue listing (no directories). */
+  packages(): ReturnType<typeof publicEntry>[] {
+    return (this.d.catalogue?.list() ?? []).map(publicEntry);
   }
 
   /** Per-package statistics from the registry (GET /v0/stats). */

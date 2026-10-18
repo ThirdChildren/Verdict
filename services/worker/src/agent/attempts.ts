@@ -3,6 +3,7 @@ import {
   type Generated,
   type Generator,
   NoCodeError,
+  NotApplicableError,
   type StreamHooks,
 } from "./generate.js";
 import { type CheckFn, NO_SANDBOX, type SelfCheck } from "./selfcheck.js";
@@ -20,7 +21,22 @@ export interface Attempt {
   reason: AttemptReason;
 }
 
-export type AttemptReason = "done" | "timeout" | "aborted";
+/** not_applicable = the model refused: the paid task is not what the package verifies (empty files). */
+export type AttemptReason = "done" | "timeout" | "aborted" | "not_applicable";
+
+/** Thrown by produceDelivery when the model said NOT_APPLICABLE and nothing usable exists. Nothing is delivered. */
+export class TaskNotApplicableError extends Error {
+  readonly code = "NOT_APPLICABLE" as const;
+  constructor(
+    readonly packageId: string,
+    readonly packageDescription: string,
+  ) {
+    super(
+      `This task is not what ${packageId} verifies (${packageDescription}). Nothing was delivered.`,
+    );
+    this.name = "TaskNotApplicableError";
+  }
+}
 
 /** Seconds kept free before `deadline - max_verify_seconds`. */
 export const SAFETY_SECONDS = 20;
@@ -73,6 +89,9 @@ export interface ProduceOptions {
   generator: Generator;
   check?: CheckFn;
   spec: string;
+  /** Package the contract commits to; used to word the refusal when the model says NOT_APPLICABLE. */
+  packageId?: string;
+  packageDescription?: string;
   maxAttempts?: number;
   /** Demo switch: deliver a deliberately broken file and skip the self-check. */
   sabotaged?: boolean;
@@ -192,6 +211,28 @@ export async function produceDelivery(
         if (reason === "aborted" || limit - now() <= 0) break;
         retry = undefined;
         continue;
+      }
+      if (err instanceof NotApplicableError) {
+        attempts.push({
+          n,
+          generated: {
+            files: [],
+            model: "",
+            generationMs: Math.max(0, now() - Date.parse(startedAt)),
+            generatedTokens: null,
+            tokensPerSec: null,
+          },
+          check: null,
+          started_at: startedAt,
+          ended_at: iso(),
+          reason: "not_applicable",
+        });
+        lastError = new TaskNotApplicableError(
+          opts.packageId ?? err.packageId,
+          opts.packageDescription ?? err.packageDescription,
+        );
+        opts.log?.("model refused: task not applicable", { attempt: n });
+        break;
       }
       if (!(err instanceof NoCodeError) || n === max) break;
       // Thinking used the whole budget: ask again, briefly, instead of failing the task.

@@ -97,6 +97,9 @@ CREATE TABLE IF NOT EXISTS mandate_snapshots (
   tasks_total INTEGER NOT NULL, tasks_settled INTEGER NOT NULL, tasks_refunded INTEGER NOT NULL,
   tasks_blocked INTEGER NOT NULL, tasks_in_flight INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS task_packages (
+  cap_hash TEXT PRIMARY KEY, package_id TEXT NOT NULL, package_sha256 TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS capabilities_root ON capabilities(root_hash);
 CREATE INDEX IF NOT EXISTS accepted_intents_cap ON accepted_intents(cap_hash);
 CREATE INDEX IF NOT EXISTS reservations_cap ON reservations(cap_hash);
@@ -238,6 +241,22 @@ export class Ledger {
         "INSERT OR IGNORE INTO accepted_intents (intent_sha256, cap_hash, signed_by, intent, created_at) VALUES (?,?,?,?,?)",
       )
       .run(sha, capHash, signedBy, JSON.stringify(intent), now.toISOString());
+  }
+
+  /** Binds a per-task child capability to the verifiable task type chosen for it. First write wins. */
+  bindPackage(capHash: string, packageId: string, packageSha256: string): void {
+    this.db
+      .prepare(
+        "INSERT OR IGNORE INTO task_packages (cap_hash, package_id, package_sha256) VALUES (?,?,?)",
+      )
+      .run(capHash, packageId, packageSha256);
+  }
+
+  getPackage(capHash: string): { packageId: string; packageSha256: string } | undefined {
+    const r = this.db
+      .prepare("SELECT package_id, package_sha256 FROM task_packages WHERE cap_hash = ?")
+      .get(capHash) as { package_id: string; package_sha256: string } | undefined;
+    return r ? { packageId: r.package_id, packageSha256: r.package_sha256 } : undefined;
   }
 
   getAcceptedIntent(

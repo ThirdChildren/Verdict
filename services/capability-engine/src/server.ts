@@ -26,6 +26,7 @@ import { type DemoRouteDeps, registerDemoToggleRoutes } from "./api/demo.js";
 import { registerEvidenceRoutes } from "./api/evidence.js";
 import { registerFundsRoutes } from "./api/funds.js";
 import { type EngineIdentities, registerMandateRoutes } from "./api/mandate.js";
+import type { Catalogue } from "./catalogue.js";
 import { type HardLimits, hardLimits } from "./config.js";
 import { Escrow } from "./escrow.js";
 import { type EngineEvent, EventBus } from "./events.js";
@@ -72,6 +73,8 @@ export interface ServerOptions {
   chainHeight?: () => Promise<number>;
   /** Lifetime of a per-task child capability (default 1 hour). */
   taskTtlMs?: number;
+  /** Verifiable task types (verifier-packages/*). Enables GET /api/task-types and the refusal in POST /api/mandate/task. */
+  catalogue?: Catalogue;
   /** Demo console: the "mine until refund" route exists only when `enabled` (VERDICT_DEMO_TOGGLES=1). */
   demo?: { enabled: boolean; mine: DemoRouteDeps["mine"]; pauseMs?: number };
 }
@@ -118,7 +121,10 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       ...(opts.mandateRateLimit ? { rateLimit: opts.mandateRateLimit } : {}),
       ...(opts.assetId ? { assetId: opts.assetId } : {}),
       ...(opts.taskTtlMs ? { taskTtlMs: opts.taskTtlMs } : {}),
+      ...(opts.catalogue ? { catalogue: opts.catalogue } : {}),
     });
+  const cat = opts.catalogue;
+  if (cat) app.get("/api/task-types", async () => ({ ok: true, types: cat.view() }));
   if (opts.ledger)
     registerEvidenceRoutes(app, {
       ledger: opts.ledger,
@@ -217,6 +223,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     opts.ledger && opts.offer && opts.engineSigner && opts.assetId
       ? new OfferService({
           ...opts.offer,
+          ...(opts.catalogue ? { catalogue: opts.catalogue } : {}),
           ledger: opts.ledger,
           bus,
           engineSigner: opts.engineSigner,

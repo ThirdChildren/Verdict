@@ -35,3 +35,13 @@ test("GET /v0/verdicts/:task_id returns the entry with its RunReport.v2, 404 oth
   expect((await app.inject({ method: "GET", url: "/v0/verdicts/nope" })).statusCode).toBe(404);
   await app.close();
 });
+
+test("GET /v0/packages lists the catalogue without directories", async () => {
+  const pkgs = [{ id: "a", hash: "h".repeat(64), format: 1, profile: null, usable: true }];
+  const service = { reports: () => [], packages: () => pkgs } as unknown as VerifierService;
+  const app = buildServer({ logger: false, service });
+  const res = await app.inject({ method: "GET", url: "/v0/packages" });
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toEqual({ packages: pkgs });
+  await app.close();
+});

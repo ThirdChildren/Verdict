@@ -36,6 +36,7 @@ async function setup(
   const hub = new FakeHub();
   const buyerWallet = new FakeWallet(`02${"b1".repeat(32)}`, hub);
   const workerWallet = new FakeWallet(`02${"c2".repeat(32)}`, hub);
+  const dirsUsed: string[] = [];
   const posted: { type: string; body: unknown; url: string }[] = [];
   const fetchImpl = (async (u: string, init?: RequestInit) => {
     posted.push({ ...(JSON.parse(String(init?.body)) as { type: string; body: unknown }), url: u });
@@ -48,15 +49,19 @@ async function setup(
     wallet: workerWallet,
     assetId: ASSET,
     precision: 2,
-    generator: async () => ({
-      files: [{ path: "csv2json.mjs", content: "console.log('[]');\n" }],
-      model: "fake",
-      generationMs: 5,
-      generatedTokens: 3,
-      tokensPerSec: 600,
-    }),
+    generatorFor: (dir) => {
+      dirsUsed.push(dir);
+      return async () => ({
+        files: [{ path: "csv2json.mjs", content: "console.log('[]');\n" }],
+        model: "fake",
+        generationMs: 5,
+        generatedTokens: 3,
+        tokensPerSec: 600,
+      });
+    },
+    resolvePackageDir: async (sha) =>
+      sha === (over.packageSha ?? "7".repeat(64)) ? "/pkg/a" : null,
     deliveryRoot: mkdtempSync(join(tmpdir(), "worker-test-")),
-    ...(over.packageSha ? { packageSha256: async () => over.packageSha as string } : {}),
     now: () => NOW,
     fetchImpl,
     ...(over.verifier
@@ -126,6 +131,7 @@ async function setup(
     buyerWallet,
     workerWallet,
     posted,
+    dirsUsed,
     preimage,
     body,
   };
@@ -176,7 +182,7 @@ describe("WorkerNode", () => {
     const t = await setup({ packageSha: "8".repeat(64) });
     const r = await t.node.handleOffer(await t.envelope(t.offer));
     expect(r).toMatchObject({ ok: false });
-    expect(JSON.stringify(r)).toContain("verification package");
+    expect(JSON.stringify(r)).toContain("test package not available on this worker");
     const same = await setup({ packageSha: "7".repeat(64) });
     expect((await same.node.handleOffer(await same.envelope(same.offer))).ok).toBe(true);
   });
@@ -254,6 +260,11 @@ describe("WorkerNode with a verifier", () => {
       },
       tid,
     );
+
+  it("resolves the package directory of the contract's hash for the generator", async () => {
+    const { t } = await delivered();
+    expect(t.dirsUsed).toEqual(["/pkg/a"]);
+  });
 
   it("waits for P_CONFIRM, delivers a signed DELIVER bundle to the contract's verifier, then claims with P after RELEASE", async () => {
     const { t, tid } = await delivered();

@@ -8,6 +8,7 @@ const service = {
   handle: async () => ({ ok: true }),
   reports: () => [],
   stats: () => ({ packages: [] }),
+  packages: () => [],
 } as unknown as VerifierService;
 
 function lanApp() {
@@ -33,9 +34,16 @@ describe("verifier over the LAN", () => {
     await app.close();
   });
 
-  test("everything else is refused from the LAN (health, verdicts, stats, info)", async () => {
+  test("everything else is refused from the LAN (health, verdicts, stats, info, packages)", async () => {
     const app = lanApp();
-    for (const url of ["/health", "/v0/verdicts", "/v0/verdicts/t1", "/v0/stats", "/v0/info"]) {
+    for (const url of [
+      "/health",
+      "/v0/verdicts",
+      "/v0/verdicts/t1",
+      "/v0/stats",
+      "/v0/info",
+      "/v0/packages",
+    ]) {
       const r = await app.inject({
         method: "GET",
         url,

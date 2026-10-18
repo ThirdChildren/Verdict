@@ -13,7 +13,7 @@ export const SERVICE = "verifier";
 export interface VerifierServerOptions {
   logger?: boolean;
   service?: VerifierService;
-  info?: () => { public_id: string; package_sha256: string; sandbox: string };
+  info?: () => Record<string, unknown>;
   localOnly?: LocalOnlyOptions;
 }
 
@@ -52,6 +52,7 @@ export function buildServer(opts: VerifierServerOptions = {}): FastifyInstance {
       }
       return entry;
     });
+    app.get("/v0/packages", async () => ({ packages: service.packages() }));
     app.get("/v0/stats", async () => service.stats());
   }
   if (info) app.get("/v0/info", async () => info());

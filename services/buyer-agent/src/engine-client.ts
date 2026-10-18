@@ -7,6 +7,7 @@ import {
   signPayload,
   WIRE_VERSION,
 } from "@verdict/protocol";
+import { DEFAULT_TASK_TYPES } from "./prompts.js";
 
 export type EngineDecision =
   | { status: "FORWARDED"; httpStatus: number; body: unknown; cap_id?: string | undefined }
@@ -32,6 +33,22 @@ export class EngineClient {
 
   get buyerId(): string {
     return this.o.signer.publicId;
+  }
+
+  /** Task types the engine can verify. A 404 (older engine) means csv2json-v1 only. */
+  async fetchTaskTypes(): Promise<{ id: string; description: string; format?: number }[]> {
+    const res = await this.fetchFn(`${this.o.baseUrl}/api/task-types`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (res.status === 404) return DEFAULT_TASK_TYPES;
+    if (!res.ok) throw new Error(`task-types answered ${res.status}`);
+    const b = (await res.json()) as {
+      types?: { id: string; description: string }[];
+      task_types?: { id: string; description: string }[];
+    };
+    const list = b.types ?? b.task_types;
+    if (!Array.isArray(list)) throw new Error("task-types: bad body");
+    return list.filter((t) => typeof t.id === "string" && typeof t.description === "string");
   }
 
   async submitIntent(intent: SpendIntent, capHash: string): Promise<EngineDecision> {

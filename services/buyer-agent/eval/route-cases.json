@@ -1,0 +1,100 @@
+{
+  "cases": [
+    {
+      "request": "Build a CSV to JSON converter CLI for 1.20 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "I need a tool that reads a .csv file and prints it as a JSON array of objects, 2 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Write a Node script that turns spreadsheet CSV exports (with quoted fields) into JSON, 1.50 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Convertire un file CSV in JSON con uno script Node, 1 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Please get me a csv2json command line program, budget 3 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Make a converter: input CSV, output JSON rows keyed by the header line, 0.80 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Hire the worker to write a CSV parser that outputs JSON, 2.50 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "I have comma separated data with line breaks inside quotes; I need it as JSON objects, 1.20 tUSD",
+      "label": "csv2json-v1"
+    },
+    {
+      "request": "Write a program that canonicalises a JSON file: sort keys recursively and print it with 2-space indent, 1 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "I need a JSON normaliser CLI with sorted keys and plain decimal numbers, 1.50 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Build a tool that prints the canonical form of a JSON file, keys in code-unit order, 2 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Normalise JSON files so equivalent objects print identically (sorted keys, no exponents), 1.20 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Normalizza un file JSON: chiavi ordinate ricorsivamente e indentazione a 2 spazi, 1 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Write a Node script that reads JSON and prints it with all object keys sorted, -0 as 0, 2.00 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Create a canonical JSON printer: sorted keys, arrays kept in order, trailing newline, 0.90 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "I want a deterministic JSON formatter that sorts keys recursively, 1.75 tUSD",
+      "label": "json-normalise-v1"
+    },
+    {
+      "request": "Convert this JSON file to CSV, 1 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Build a snake game in JavaScript, 2 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Write a function that sums two numbers, 0.50 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Pretty-print this JSON with 4-space indent, 0.50 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Write a blog post about Bitcoin, 3 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Research three papers on RGB and summarise them, 4 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Convert an XML file to JSON, 1.50 tUSD",
+      "label": "none"
+    },
+    {
+      "request": "Fix a bug in my Python script, 2 tUSD",
+      "label": "none"
+    }
+  ]
+}

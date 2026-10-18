@@ -10,7 +10,7 @@ import {
   registerWdkEip191Verifier,
 } from "@verdict/identity";
 import { createEd25519Signer } from "@verdict/protocol";
-import { dirHashFromDisk } from "@verdict/protocol/node";
+import { Catalogue } from "./catalogue.js";
 import { Registry } from "./registry.js";
 import { requireSandbox } from "./runner.js";
 import { buildServer, LAN_ROUTES, SERVICE } from "./server.js";
@@ -36,16 +36,22 @@ try {
   const signer = await createEd25519Signer(seed);
   if (signer.publicId !== ids.verifier)
     throw new Error("The verifier key does not match identities.json. Run: pnpm keys:init");
-  const packageDir =
-    process.env.VERIFIER_PACKAGE_DIR ??
-    resolve(dirname(fileURLToPath(import.meta.url)), "../../../verifier-packages/csv2json-v1");
-  const packageSha = await dirHashFromDisk(packageDir);
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const single = process.env.VERIFIER_PACKAGE_DIR;
+  const catalogue = single
+    ? await Catalogue.fromDir(single)
+    : await Catalogue.fromRoot(
+        process.env.VERIFIER_PACKAGES_ROOT ?? resolve(repoRoot, "verifier-packages"),
+      );
+  const usable = catalogue.list().filter((e) => e.usable);
+  if (usable.length === 0) throw new Error("No usable verifier package found.");
+  const packageSha = usable[0]?.hash ?? "";
   // No escape hatch: without a working sandbox the verifier does not start (M3).
   const sandbox = requireSandbox();
   const service = new VerifierService({
     signer,
     seed,
-    packageDir,
+    catalogue,
     registry: new Registry(
       process.env.VERIFIER_REGISTRY ?? resolve(dir, "verifier", "registry.json"),
     ),
@@ -54,11 +60,19 @@ try {
     workerUrl: peers.worker,
     log: (msg, extra) => console.log(`[${SERVICE}] ${msg}`, extra ? JSON.stringify(extra) : ""),
   });
-  console.log(`[${SERVICE}] ${signer.publicId} package ${packageSha} sandbox ${sandbox}`);
+  console.log(
+    `[${SERVICE}] ${signer.publicId} packages ${usable.map((e) => `${e.id}:${e.hash}`).join(" ")} sandbox ${sandbox}`,
+  );
   app = buildServer({
     localOnly: lo,
     service,
-    info: () => ({ public_id: signer.publicId, package_sha256: packageSha, sandbox }),
+    info: () => ({
+      public_id: signer.publicId,
+      package_sha256: packageSha,
+      sandbox,
+      packages: catalogue.size,
+      profiles: Object.fromEntries(usable.map((e) => [e.id, e.profile])),
+    }),
   });
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));

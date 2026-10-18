@@ -17,6 +17,7 @@ import {
   verifyPayload,
 } from "@verdict/protocol";
 import type { FastifyInstance } from "fastify";
+import type { Catalogue, PackageEntry } from "../catalogue.js";
 import type { HardLimits } from "../config.js";
 import type { EventBus } from "../events.js";
 import type { Ledger } from "../ledger/index.js";
@@ -44,6 +45,8 @@ export interface MandateDeps {
   readonly rateLimit?: { max: number; windowMs: number };
   /** Lifetime of a per-task child from POST /api/mandate/task (default 1 hour, capped by the root's expiry). */
   readonly taskTtlMs?: number;
+  /** Verifiable task types. When set, POST /api/mandate/task refuses work whose type is not in it. */
+  readonly catalogue?: Catalogue;
 }
 
 const PLACEHOLDER_SIG = `0x${"0".repeat(130)}`;
@@ -286,6 +289,31 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       return refuse(b, body ?? null);
     };
     try {
+      let chosen: PackageEntry | undefined;
+      if (d.catalogue) {
+        const rec =
+          typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+        const wanted = typeof rec.package_id === "string" ? rec.package_id : undefined;
+        // One entry and no choice made: that entry is the default (the single-package demo). Anything else must be named.
+        chosen =
+          wanted === undefined
+            ? d.catalogue.entries.length === 1
+              ? d.catalogue.entries[0]
+              : undefined
+            : d.catalogue.byId(wanted);
+        if (!chosen) {
+          const message = `Verdict only buys work it can verify. Task types available: ${d.catalogue.describe() || "none right now"}.`;
+          d.bus.publish(
+            {
+              type: "TASK_REFUSED",
+              data: { reason: message, task_types: d.catalogue.entries.map((e) => e.id) },
+            },
+            d.now(),
+          );
+          reply.code(422);
+          return { ok: false, code: "TASK_NOT_VERIFIABLE", message };
+        }
+      }
       const requested =
         typeof body === "object" && body !== null
           ? (body as Record<string, unknown>).root_hash
@@ -372,10 +400,17 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
       });
       if (!dec.ok) return fail(422, dec);
       const childHash = capabilityHash(child);
-      d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer, now);
+      d.ledger.inTransaction(() => {
+        d.ledger.registerCapability(child, childHash, rootHash, d.identities.buyer, now);
+        if (chosen) d.ledger.bindPackage(childHash, chosen.id, chosen.hash);
+      });
       d.bus.publish({ type: "CAP_CHILD", data: child }, now);
       announceBudget(rootHash, childHash, now);
-      return { ok: true, cap_hash: childHash };
+      return {
+        ok: true,
+        cap_hash: childHash,
+        ...(chosen ? { package_id: chosen.id, package_sha256: chosen.hash } : {}),
+      };
     } catch {
       return fail(
         500,

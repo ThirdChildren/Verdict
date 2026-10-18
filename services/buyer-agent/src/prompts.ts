@@ -21,6 +21,28 @@ Fields:
 - task_spec: short description of the work (max 300 chars)
 - deadline_minutes: integer minutes from now until the work is due (5..1440, default 60)
 - rationale: one short sentence for the user (max 200 chars)
-Report what the goal asks for, even if it looks unreasonable. You only propose; a separate engine decides.
+Report the amount and limits the goal states, even if they look unreasonable: a separate engine decides on them. Only the listed task types can be bought; a goal that fits none of them is refused in an earlier step, so never stretch a goal to fit.
 Example goal: "Get a CSV to JSON converter built for 1.20 tUSD within 2 hours"
 Example output: {"kind":"task_payment","worker":"worker","category":"code","amount_minor":120,"recurring":false,"interval":"none","task_spec":"Build a CSV to JSON converter CLI","deadline_minutes":120,"rationale":"Hiring the worker for a small one-off coding task."}`;
+
+export type RouteTaskType = { id: string; description: string };
+
+/** Catalogue used when the engine has no /api/task-types (older engine): the one original package. */
+export const DEFAULT_TASK_TYPES: RouteTaskType[] = [
+  {
+    id: "csv2json-v1",
+    description: "A command line tool that converts a CSV file to a JSON array of objects.",
+  },
+];
+
+/** Routing prompt: pick the one package whose description the request fits exactly, else abstain with "none". */
+export function routeSystem(types: RouteTaskType[]): string {
+  const list = types.map((t) => `- ${t.id}: ${t.description}`).join("\n");
+  return `You decide which automatic test package can verify the work a person wants to buy. Reply with a single JSON object only: {"package_id": <id or "none">, "reason": <one short sentence>}.
+Verdict only buys work that one of these packages can verify:
+${list}
+Pick a package_id ONLY if the request asks for exactly what that package's description says. If it is close but different, or fits none, reply "none". When unsure, reply "none": refusing is correct and costs nothing; a wrong match wastes money.
+Negative examples:
+- "Convert this JSON file to CSV" -> {"package_id":"none","reason":"The packages convert CSV to JSON or normalise JSON, not JSON to CSV."}
+- "Build me a snake game" -> {"package_id":"none","reason":"No package verifies a game."}`;
+}

@@ -1,7 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dirHashFromDisk } from "@verdict/protocol/node";
 import {
   assertEip191VerifierForMode,
   dataDir,
@@ -12,6 +11,7 @@ import {
   registerWdkEip191Verifier,
   WalletClient,
 } from "@verdict/wallet";
+import { Catalogue, intersectWithVerifier, loadCatalogue, packagesRoot } from "./catalogue.js";
 import { bitcoindHeight, resolveBitcoindRpc } from "./chain.js";
 import { hardLimits } from "./config.js";
 import { contractLimits } from "./contract-config.js";
@@ -39,13 +39,21 @@ try {
   const peers = loadPeers();
   const limits = contractLimits();
   const walletOn = process.env.VERDICT_WALLET === "1";
-  const verifierPackage = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "../../../verifier-packages/csv2json-v1",
+  const root = packagesRoot();
+  const found = await loadCatalogue(root);
+  const meet = await intersectWithVerifier(found, peers.verifier);
+  console.log(
+    meet.filtered
+      ? `task types: ${meet.entries.map((e) => e.id).join(", ") || "none"} (also on the verifier)`
+      : `task types: ${meet.entries.map((e) => e.id).join(", ") || "none"} (verifier list unavailable, all kept)`,
   );
+  const catalogue = new Catalogue(meet.entries);
+  // Default package for a task with no type, used only while the catalogue has exactly one entry.
+  const defaultPackage = meet.entries.length === 1 ? meet.entries[0]?.hash : undefined;
   app = await buildServer({
     ledger,
     localOnly,
+    catalogue,
     chainHeight: bitcoindHeight(resolveBitcoindRpc(process.env, loadNetwork(dir))),
     identities,
     ...(walletOn
@@ -57,7 +65,7 @@ try {
             verifier: {
               publicId: identities.verifier,
               endpoint: peers.verifier,
-              packageSha256: await dirHashFromDisk(verifierPackage),
+              packageSha256: defaultPackage ?? "",
             },
             workerUrl: peers.worker,
             maxLockSeconds: limits.max_lock_seconds,

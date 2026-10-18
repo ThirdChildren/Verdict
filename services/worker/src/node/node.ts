@@ -14,8 +14,9 @@ import {
   verifyPayload,
 } from "@verdict/protocol";
 import type { PaymentStatusEvent, WalletPort } from "@verdict/wallet";
-import { type Attempt, produceDelivery } from "../agent/attempts.js";
+import { type Attempt, type AttemptReason, produceDelivery } from "../agent/attempts.js";
 import type { Generated, Generator } from "../agent/generate.js";
+import { packageId as packageIdOf, readManifest } from "../agent/package.js";
 import type { CheckFn } from "../agent/selfcheck.js";
 import { bundleDelivery, type StoredDelivery, storeDelivery } from "../store.js";
 import type { StreamHub } from "../stream.js";
@@ -59,7 +60,7 @@ export interface WorkerTask {
     self_check: "PASS" | "FAIL" | "WITHHOLD" | "not run";
     started_at: string;
     ended_at: string;
-    reason: "done" | "timeout" | "aborted";
+    reason: AttemptReason;
   }[];
   /** Last verdict the verifier signed for this task, as the UI worker lane shows it. */
   verdict?: { attempt: number; verdict: "RELEASE" | "WITHHOLD"; exit_code: number };
@@ -76,9 +77,12 @@ export interface WorkerNodeDeps {
   wallet: WalletPort;
   assetId: string;
   precision: number;
-  generator: Generator;
-  /** Local run of the verifier package before announcing the delivery. Absent: single attempt, no check. */
-  check?: CheckFn;
+  /** Builds the generator for one package directory (the package the task's contract names). */
+  generatorFor: (packageDir: string) => Generator;
+  /** Builds the local self-check for one package directory. Absent: single attempt, no check. */
+  checkFor?: (packageDir: string) => CheckFn;
+  /** Local directory of the package with this hash (agent/package.ts resolvePackageDir), or null when this worker lacks it. */
+  resolvePackageDir: (packageSha256: string) => Promise<string | null>;
   /** Live token stream for the UI worker lane. */
   stream?: StreamHub;
   /** Demo switch, read at the start of each task. */
@@ -87,8 +91,6 @@ export interface WorkerNodeDeps {
   disappears?: () => boolean;
   /** The verifier's public id; its P_CONFIRM, VERDICT and PREIMAGE are the only ones the worker acts on. */
   verifierId?: string;
-  /** Hash of the verification package this worker self-checks with. When set, an offer naming another package is refused. */
-  packageSha256?: () => Promise<string>;
   /** How long to wait for P_CONFIRM before the HODL invoice is made, ms. */
   confirmWaitMs?: number;
   deliveryRoot: string;
@@ -235,16 +237,13 @@ export class WorkerNode {
     }
     if (Date.parse(offer.task.deadline) <= this.now().getTime())
       return "the deadline has already passed";
-    if (this.d.packageSha256) {
-      let local: string;
-      try {
-        local = await this.d.packageSha256();
-      } catch {
-        return "this worker cannot read its copy of the verification package";
-      }
-      if (local !== offer.verifier.package_sha256)
-        return "this worker's verification package is not the one the contract names, so its self-check would not match the verifier's";
+    let dir: string | null;
+    try {
+      dir = await this.d.resolvePackageDir(offer.verifier.package_sha256);
+    } catch {
+      dir = null;
     }
+    if (dir === null) return "test package not available on this worker";
     const plan = this.lockPlan(offer);
     if ("reason" in plan) return plan.reason;
     return undefined;
@@ -446,11 +445,21 @@ export class WorkerNode {
   private async work(task: WorkerTask): Promise<void> {
     const contract = this.contracts.get(task.taskId);
     if (!contract) throw new Error("no contract for this task");
+    const packageDir = await this.d.resolvePackageDir(contract.verifier.package_sha256);
+    if (packageDir === null) throw new Error("test package not available on this worker");
     task.state = "GENERATING";
     const sabotaged = task.toggles?.sabotaged ?? this.d.sabotaged?.() ?? false;
+    let pkg: { packageId?: string; packageDescription?: string } = {};
+    try {
+      const m = readManifest(packageDir);
+      pkg = { packageId: packageIdOf(packageDir, m), packageDescription: m.description ?? "" };
+    } catch {
+      // unreadable manifest: the refusal falls back to the generator's own wording
+    }
     const { best, attempts } = await produceDelivery({
-      generator: this.d.generator,
-      ...(this.d.check ? { check: this.d.check } : {}),
+      ...pkg,
+      generator: this.d.generatorFor(packageDir),
+      ...(this.d.checkFor ? { check: this.d.checkFor(packageDir) } : {}),
       spec: contract.task.spec,
       sabotaged,
       // The loop stops at deadline - max_verify_seconds - safety and delivers the best attempt so far (E22).

@@ -11,6 +11,7 @@ import {
   spendIntentSchema,
   taskId,
 } from "@verdict/protocol";
+import type { Catalogue } from "./catalogue.js";
 import type { EventBus } from "./events.js";
 import type { Ledger } from "./ledger/index.js";
 import { type Block, block } from "./policy/index.js";
@@ -19,6 +20,9 @@ export interface OfferConfig {
   ledger: Ledger;
   bus: EventBus;
   engineSigner: Signer;
+  /** The packages the engine may name. When set, a contract can only carry a hash found here. */
+  catalogue?: Catalogue;
+  /** `packageSha256` is the default for a task with no bound type, and only while the catalogue has at most one entry. */
   verifier: { publicId: string; endpoint: string; packageSha256: string };
   /** Base URL of the worker service (loopback). */
   workerUrl: string;
@@ -68,6 +72,15 @@ export class OfferService {
     if (info.public_id !== intent.counterparty)
       return block("COUNTERPARTY_NOT_ALLOWED", { counterparty: info.public_id });
 
+    let packageSha256: string;
+    try {
+      packageSha256 = this.packageFor(accepted.capHash);
+    } catch (e) {
+      return block("MALFORMED_INTENT", {
+        reason: `${e instanceof Error ? e.message : "the test package could not be chosen"}; nothing was signed`,
+      });
+    }
+
     const preimageHex = randomHex32();
     const paymentHash = sha256Hex(Buffer.from(preimageHex, "hex"));
     const body = {
@@ -93,7 +106,7 @@ export class OfferService {
       verifier: {
         public_id: this.c.verifier.publicId,
         endpoint: this.c.verifier.endpoint,
-        package_sha256: this.c.verifier.packageSha256,
+        package_sha256: packageSha256,
         entrypoint: "./verify.sh",
         rule: "EXIT_0_AND_SCHEMA_VALID" as const,
       },
@@ -121,6 +134,23 @@ export class OfferService {
     const sent = await this.post(info.public_id, "TASK_OFFER", tid, offer);
     if (!sent.ok) return sent;
     return { ok: true, taskId: tid, paymentHash };
+  }
+
+  /** The package hash for a task: its bound type, else the single default. Throws (fail closed) for anything not in the catalogue. */
+  private packageFor(capHash: string): string {
+    const cat = this.c.catalogue;
+    const bound = this.c.ledger.getPackage(capHash);
+    if (bound) {
+      if (cat && !cat.byHash(bound.packageSha256))
+        throw new Error("the task's test package is not in the engine's catalogue");
+      return bound.packageSha256;
+    }
+    if (cat && cat.entries.length !== 1)
+      throw new Error("no verifiable task type is bound to this permission");
+    const dflt = this.c.verifier.packageSha256;
+    if (cat && !cat.byHash(dflt))
+      throw new Error("the default test package is not in the engine's catalogue");
+    return dflt;
   }
 
   private async workerInfo(): Promise<{ public_id: string; node_id: string }> {

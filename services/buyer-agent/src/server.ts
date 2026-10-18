@@ -12,6 +12,7 @@ import { AgentError, BuyerAgent } from "./agent.js";
 import { type ActiveCap, compromisedAgentAttempt } from "./attack.js";
 import type { EngineClient } from "./engine-client.js";
 import type { WorkerDirectory } from "./identities.js";
+import { DEFAULT_TASK_TYPES } from "./prompts.js";
 
 export const SERVICE = "buyer-agent";
 
@@ -24,6 +25,8 @@ export type ServerDeps = {
   /** Worker names the agent may hire, mapped to public ids (from identities.json). */
   workers?: WorkerDirectory;
   /** Hash of the child capability the engine bound to this buyer; null until one is registered. */
+  /** Catalogue source for routing (main.ts passes engine.fetchTaskTypes). Absent: no routing. */
+  taskTypes?: () => Promise<{ id: string; description: string }[]>;
   getCapHash?: () => Promise<string | null>;
   getActiveCap?: () => Promise<ActiveCap | null>;
   now?: () => Date;
@@ -61,6 +64,7 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           llm: deps.llm,
           workers: deps.workers,
           ...(deps.now ? { now: deps.now } : {}),
+          ...(deps.taskTypes ? { taskTypes: deps.taskTypes } : {}),
           ...(deps.llmTimeoutMs !== undefined ? { timeoutMs: deps.llmTimeoutMs } : {}),
         })
       : null;
@@ -68,7 +72,7 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
   const guard = (reply: { code(n: number): unknown }, err: unknown) => {
     if (err instanceof AgentError) {
       reply.code(
-        err.code === "AMOUNT_NOT_IN_GOAL"
+        err.code === "AMOUNT_NOT_IN_GOAL" || err.code === "TASK_NOT_VERIFIABLE"
           ? 422
           : err.code === "COUNTERPARTY_NOT_ALLOWED"
             ? 403
@@ -105,6 +109,41 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
     }
   });
 
+  // Routing only: which verifiable task type fits this request, or 422 TASK_NOT_VERIFIABLE. Sends nothing.
+  app.post("/api/route", async (req, reply) => {
+    const body = z
+      .object({ request: z.string().min(3).max(1000) })
+      .strict()
+      .safeParse(req.body);
+    if (!body.success)
+      return reply.code(400).send({
+        ok: false,
+        code: "BAD_REQUEST",
+        message: "Please describe the task in a sentence.",
+      });
+    if (!agent)
+      return reply
+        .code(503)
+        .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
+    try {
+      const types = deps.taskTypes ? await deps.taskTypes() : DEFAULT_TASK_TYPES;
+      const r = await agent.route(body.data.request, types.length > 0 ? types : DEFAULT_TASK_TYPES);
+      return { ok: true, package_id: r.package_id, reason: r.reason };
+    } catch (err) {
+      if (err instanceof AgentError && err.code === "TASK_NOT_VERIFIABLE") {
+        const types = deps.taskTypes ? await deps.taskTypes().catch(() => []) : DEFAULT_TASK_TYPES;
+        reply.code(422);
+        return {
+          ok: false,
+          code: err.code,
+          message: err.message,
+          task_types: types.map((t) => t.id),
+        };
+      }
+      return guard(reply, err);
+    }
+  });
+
   // 2. After the mandate is signed: plan the task and POST the spend intent. The engine's answer
   // (including BLOCKED) is surfaced as an event and in the response; the agent works the same either way.
   app.post("/api/plan", async (req, reply) => {
@@ -120,9 +159,14 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
         .code(503)
         .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
     try {
-      const { intent, thinking } = await agent.planIntentWithThinking(body.data.goal);
+      const { intent, thinking, route } = await agent.planIntentWithThinking(body.data.goal);
       // Intent fields stay at the top level (older readers); `intent` and `thinking` sit beside them.
-      emit("intent.proposed", { ...intent, intent, thinking });
+      emit("intent.proposed", {
+        ...intent,
+        intent,
+        thinking,
+        ...(route ? { package_id: route.package_id, route_reason: route.reason } : {}),
+      });
       const capHash = (await deps.getCapHash?.()) ?? null;
       if (!capHash)
         return reply.code(409).send({
@@ -144,9 +188,12 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
         intent_sha256: hashObj({ cap_hash: capHash, intent }),
         cap_hash: capHash,
       });
-      return { ok: true, intent, decision };
+      return { ok: true, intent, decision, ...(route ? { package_id: route.package_id } : {}) };
     } catch (err) {
-      emit("intent.failed", { message: failMessage(err) });
+      emit("intent.failed", {
+        message: failMessage(err),
+        ...(err instanceof AgentError ? { code: err.code } : {}),
+      });
       return guard(reply, err);
     }
   });

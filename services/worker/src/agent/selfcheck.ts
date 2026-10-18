@@ -31,13 +31,27 @@ export type CheckFn = (files: DeliveryFile[]) => Promise<SelfCheck>;
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_PACKAGE_DIR = resolve(HERE, "../../../../verifier-packages/csv2json-v1");
 
-/** Hints keyed by `package_id/check_id`. Only check ids and generic advice, never hidden case content. */
+/**
+ * Hints keyed by `package_id/check_id`. Only check ids and the rule that was broken, never hidden case content.
+ * A hint restates the rule so a retry is driven by the rule, not only by the broken file.
+ */
 export const HINTS: Record<string, string> = {
   "csv2json-v1/tests":
-    "Your tool printed the wrong JSON for at least one of the six test files. Re-check: a quoted field that contains a line break (parse the whole file character by character, never split on newlines first), doubled quotes, CRLF, empty cells, header-only file, key order, all values strings, indent 2.",
+    'Quoting rule: a comma, a doubled quote ("") or a line break inside a quoted field is part of the value. Parse the whole file character by character with a state machine (never split on newlines or commas first). Also re-check CRLF, empty cells, a header-only file, key order, all values strings, indent 2.',
   "csv2json-v1/schema": "The output is not an array of objects with string values.",
   "csv2json-v1/no-network":
     "The code uses a forbidden import (network or process module, fetch, import() or require()).",
+  "json-normalise-v1/fixtures":
+    'Canonical rule: object keys sorted recursively in plain code-unit order ("B" before "a"), arrays kept in input order, numbers in plain decimal (no exponent, -0 as 0), 2-space indent, trailing newline.',
+  "json-normalise-v1/visible":
+    "The output differs from a shown example. Canonical rule: keys sorted recursively in code-unit order, arrays in input order, plain decimal numbers, 2-space indent, trailing newline.",
+  "json-normalise-v1/schema": "The output is not valid JSON of the same shape as the input.",
+  "json-normalise-v1/idempotent":
+    "The same data with keys in a different order must print identical output: sort every object's keys recursively.",
+  "json-normalise-v1/static":
+    "The code uses a forbidden import or token (network or process modules, fetch, import(), eval).",
+  "json-normalise-v1/limits": "The source file is over the size limits listed in the rules.",
+  "json-normalise-v1/spec": "The output breaks one of the rules listed in the task.",
 };
 
 /** Used when a package/check pair has no specific hint. */
@@ -149,7 +163,7 @@ export function probeSample(deliveryDir: string): string {
   }
 }
 
-/** Runs the package's own verify.sh through the verifier's sandboxed runner. Never throws: a failure to run is WITHHOLD. */
+/** Runs the package's checks through the verifier's sandboxed runner. Never throws: a failure to run is WITHHOLD. */
 export function localSelfCheck(
   opts: {
     packageDir?: string;
@@ -157,6 +171,8 @@ export function localSelfCheck(
     packageSha256?: string | (() => string | undefined);
     packagesRoot?: string;
     maxVerifySeconds?: number;
+    /** The paid task text; when set, the feedback starts with "This delivery is checked by <id> against the task: <spec>.". */
+    spec?: string | (() => string | undefined);
     /** Test seam; defaults to the verifier's sandbox detection. */
     detect?: () => unknown;
   } = {},
@@ -208,13 +224,16 @@ export function localSelfCheck(
       }
       let probe = "";
       if (failedChecks.length > 0) {
-        if (task === null) probe = `\n${probeSample(dir)}`;
-        else if (failedChecks.some((c) => kinds.get(c) === "fixtures")) {
+        if (task === null) {
+          if (id === "csv2json-v1") probe = `\n${probeSample(dir)}`;
+        } else if (failedChecks.some((c) => kinds.get(c) === "fixtures")) {
           const p = probeVisible(dir, task);
           probe = p ? `\n${p}` : "";
         }
       }
-      const feedback = `${failedChecks.map((c) => `- ${c}: failed. ${hintFor(id, c, kinds.get(c))}`).join("\n")}${probe}`;
+      const spec = typeof opts.spec === "function" ? opts.spec() : opts.spec;
+      const head = spec ? `This delivery is checked by ${id} against the task: ${spec}.\n` : "";
+      const feedback = `${head}${failedChecks.map((c) => `- ${c}: failed. ${hintFor(id, c, kinds.get(c))}`).join("\n")}${probe}`;
       return { outcome: "FAIL", failedChecks, feedback };
     } catch (e) {
       return { outcome: "WITHHOLD", failedChecks: [], feedback: (e as Error).message };

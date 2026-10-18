@@ -8,10 +8,17 @@ import {
   llmMandateSchema,
   type MandateProposal,
   resolveWorker,
+  routeSchema,
   toMandateProposal,
   toSpendIntent,
 } from "./llm-schemas.js";
-import { INTENT_SYSTEM, MANDATE_SYSTEM } from "./prompts.js";
+import {
+  DEFAULT_TASK_TYPES,
+  INTENT_SYSTEM,
+  MANDATE_SYSTEM,
+  type RouteTaskType,
+  routeSystem,
+} from "./prompts.js";
 
 export class AgentError extends Error {
   constructor(
@@ -19,7 +26,8 @@ export class AgentError extends Error {
       | "PLAN_FAILED"
       | "LLM_TIMEOUT"
       | "AMOUNT_NOT_IN_GOAL"
-      | "COUNTERPARTY_NOT_ALLOWED",
+      | "COUNTERPARTY_NOT_ALLOWED"
+      | "TASK_NOT_VERIFIABLE",
     message: string,
   ) {
     super(message);
@@ -33,7 +41,16 @@ export type AgentConfig = {
   now?: () => Date;
   /** Overrides both call sites (env BUYER_LLM_TIMEOUT_MS does the same). */
   timeoutMs?: number;
+  /**
+   * Catalogue of task types the engine can verify. When set, planIntent routes the request first and refuses
+   * (TASK_NOT_VERIFIABLE) what no package fits. When absent no routing happens (unit tests of older paths).
+   */
+  taskTypes?: () => Promise<RouteTaskType[]>;
 };
+
+export const ROUTE_TIMEOUT_MS = 30_000;
+
+export type Route = { package_id: string; reason: string };
 
 /** Default per-call budgets in ms (the whole call including its one retry). */
 export const MANDATE_TIMEOUT_MS = 60_000;
@@ -89,7 +106,46 @@ export class BuyerAgent {
     return (await this.planIntentWithThinking(goal)).intent;
   }
 
-  async planIntentWithThinking(goal: string): Promise<{ intent: SpendIntent; thinking: string }> {
+  /** Picks the one package that verifies this request, or throws TASK_NOT_VERIFIABLE. Nothing is sent either way. */
+  async route(goal: string, types: RouteTaskType[]): Promise<Route> {
+    let r: Route;
+    try {
+      const out = await this.cfg.llm.structured(
+        routeSchema(types.map((t) => t.id)),
+        [
+          { role: "system", content: routeSystem(types) },
+          { role: "user", content: `Request: ${goal}` },
+        ],
+        { name: "route", maxTokens: 300, timeoutMs: timeoutFor(this.cfg, ROUTE_TIMEOUT_MS) },
+      );
+      r = out.value;
+    } catch (err) {
+      throw this.fail(err, "I could not tell what kind of work this is. Nothing was sent.");
+    }
+    if (r.package_id === "none")
+      throw new AgentError(
+        "TASK_NOT_VERIFIABLE",
+        `Verdict only buys work it can verify. Task types today: ${types.map((t) => `${t.id} (${t.description})`).join("; ")}. Nothing was sent.`,
+      );
+    return r;
+  }
+
+  async planIntentWithThinking(
+    goal: string,
+  ): Promise<{ intent: SpendIntent; thinking: string; route?: Route }> {
+    let route: Route | undefined;
+    if (this.cfg.taskTypes) {
+      let types: RouteTaskType[];
+      try {
+        types = await this.cfg.taskTypes();
+      } catch {
+        throw new AgentError(
+          "PLAN_FAILED",
+          "The list of verifiable task types is not available, so nothing was sent.",
+        );
+      }
+      route = await this.route(goal, types.length > 0 ? types : DEFAULT_TASK_TYPES);
+    }
     let intent: SpendIntent;
     let minor: number;
     let thinking: string;
@@ -119,7 +175,7 @@ export class BuyerAgent {
         `The planned amount ${intent.amount} tUSD does not appear in your request, so nothing was sent. Please state the amount clearly.`,
       );
     }
-    return { intent, thinking };
+    return { intent, thinking, ...(route ? { route } : {}) };
   }
 
   private fail(err: unknown, message: string): AgentError {

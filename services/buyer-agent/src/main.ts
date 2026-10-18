@@ -51,6 +51,7 @@ const app = buildServer({
   ...(llm ? { llm } : {}),
   workers,
   engine,
+  taskTypes: () => engine.fetchTaskTypes(),
   getCapHash,
   getActiveCap,
 });

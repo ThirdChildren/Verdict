@@ -531,3 +531,104 @@ test("a failing event bus does not turn a committed mandate into a refusal", asy
   expect(c.ledger.isRevoked(capabilityHash(rootB))).toBe(false);
   await c.app.close();
 });
+
+// ---- task types (E31) ----
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Catalogue, loadCatalogue } from "../catalogue.js";
+
+async function withTypes() {
+  const dir = mkdtempSync(join(tmpdir(), "types-"));
+  for (const [n, m] of [
+    ["csv2json-v1", { description: "CSV to JSON" }],
+    ["json-normalise-v1", { format: 2, id: "json-normalise-v1", description: "Normalise JSON" }],
+  ] as const) {
+    mkdirSync(join(dir, n));
+    writeFileSync(join(dir, n, "manifest.json"), JSON.stringify(m));
+  }
+  const catalogue = new Catalogue(await loadCatalogue(dir));
+  const principal = await createEd25519Signer(seed(1));
+  const engine = await createEd25519Signer(seed(2));
+  const buyer = await createEd25519Signer(seed(3));
+  const ledger = Ledger.open(":memory:", k.P);
+  const bus = new EventBus();
+  const app = await buildServer({
+    logger: false,
+    ledger,
+    bus,
+    catalogue,
+    precision: k.P,
+    now: () => k.NOW,
+    identities: { principal: principal.publicId, engine: engine.publicId, buyer: buyer.publicId },
+    engineSigner: engine,
+    limits: { max_root_amount: "500.00", max_root_expiry_seconds: 86_400 },
+  });
+  const root = await signedRoot(principal);
+  expect((await postMandate(app, root)).statusCode).toBe(200);
+  return { app, ledger, bus, catalogue };
+}
+
+test("GET /api/task-types lists the catalogue without directories", async () => {
+  const s = await withTypes();
+  const r = await s.app.inject({ method: "GET", url: "/api/task-types" });
+  expect(r.statusCode).toBe(200);
+  const j = r.json() as { types: Record<string, unknown>[] };
+  expect(j.types.map((t) => t.id)).toEqual(["csv2json-v1", "json-normalise-v1"]);
+  expect(JSON.stringify(j)).not.toContain(tmpdir());
+});
+
+test("task-types route is behind the local-only guard", async () => {
+  const principal = await createEd25519Signer(seed(1));
+  const engine = await createEd25519Signer(seed(2));
+  const dir = mkdtempSync(join(tmpdir(), "types-"));
+  const app = await buildServer({
+    logger: false,
+    ledger: Ledger.open(":memory:", k.P),
+    catalogue: new Catalogue(await loadCatalogue(dir)),
+    identities: { principal: principal.publicId, engine: engine.publicId, buyer: engine.publicId },
+    engineSigner: engine,
+    localOnly: { port: 7401, uiOrigins: ["http://localhost:5173"] },
+  });
+  const r = await app.inject({
+    method: "GET",
+    url: "/api/task-types",
+    headers: { host: "evil.example" },
+  });
+  expect(r.statusCode).toBeGreaterThanOrEqual(400);
+});
+
+test("refuses an unknown or missing package_id: 422, nothing registered, only a UI event", async () => {
+  const s = await withTypes();
+  const before = s.ledger.latestChild();
+  const seen: string[] = [];
+  s.bus.subscribe((e) => seen.push(e.type));
+  for (const payload of [
+    { package_id: "snake-game" },
+    { amount: "1.00" },
+    { package_id: "none" },
+  ]) {
+    const r = await s.app.inject({ method: "POST", url: "/api/mandate/task", payload });
+    expect(r.statusCode).toBe(422);
+    const j = r.json() as { ok: boolean; code: string; message: string };
+    expect(j).toMatchObject({ ok: false, code: "TASK_NOT_VERIFIABLE" });
+    expect(j.message).toContain("csv2json-v1 (CSV to JSON)");
+    expect(j.message).toContain("json-normalise-v1");
+  }
+  expect(s.ledger.latestChild()).toBe(before);
+  expect(seen).toEqual(["TASK_REFUSED", "TASK_REFUSED", "TASK_REFUSED"]);
+});
+
+test("a known package_id derives a child bound to that package's hash", async () => {
+  const s = await withTypes();
+  const r = await s.app.inject({
+    method: "POST",
+    url: "/api/mandate/task",
+    payload: { package_id: "json-normalise-v1", amount: "1.00" },
+  });
+  expect(r.statusCode).toBe(200);
+  const j = r.json() as { cap_hash: string; package_id: string; package_sha256: string };
+  expect(j.package_id).toBe("json-normalise-v1");
+  expect(s.ledger.getPackage(j.cap_hash)?.packageSha256).toBe(j.package_sha256);
+  expect(j.package_sha256).toBe(s.catalogue.byId("json-normalise-v1")?.hash);
+});

@@ -104,23 +104,72 @@ export class NoCodeError extends Error {
 /** Per-attempt token cap, measured on the Legion with the real 9B. */
 export const DEFAULT_MAX_TOKENS = 4000;
 
-/** The system prompt for a package: format 2 is built from its manifest, format 1 (task absent) keeps the csv2json text. */
+/** What the model is told about the package it is writing for. */
+export interface PackageInfo {
+  id: string;
+  description: string;
+}
+
+/** Format-1 csv2json package: it has no manifest id or description. */
+export const V1_INFO: PackageInfo = {
+  id: "csv2json-v1",
+  description: "A command line tool that converts a CSV file to a JSON array of objects.",
+};
+
+/** The reply the model gives when the paid task is not what the package verifies. */
+export const NOT_APPLICABLE = "NOT_APPLICABLE";
+
+/** The model judged the paid task outside what the package verifies. A refusal, not a failure to write code. */
+export class NotApplicableError extends Error {
+  readonly code = "NOT_APPLICABLE" as const;
+  constructor(
+    readonly packageId: string,
+    readonly packageDescription: string,
+  ) {
+    super(`the task is not what ${packageId} verifies`);
+    this.name = "NotApplicableError";
+  }
+}
+
+/** First lines of every prompt (both formats): the task, the package, and the way out. */
+export function preamble(spec: string, info: PackageInfo): string {
+  return `The paid task is: ${spec}. The test package is ${info.id}: ${info.description}. If the task is not what this package verifies, reply exactly ${NOT_APPLICABLE} and nothing else.`;
+}
+
+/** The system prompt body for a package: V1_SYSTEM only for csv2json-v1 (task absent), else built from the manifest. */
 export function systemPrompt(task?: PackageTask | null): string {
   return task ? buildPackagePrompt(task) : V1_SYSTEM;
+}
+
+/** Full system prompt for one request: preamble first, then the package text. */
+export function fullPrompt(spec: string, info: PackageInfo, task?: PackageTask | null): string {
+  return `${preamble(spec, info)}\n\n${systemPrompt(task)}`;
+}
+
+/** True when the whole reply is the refusal token (tolerating thinking leftovers, fences and punctuation). */
+export function isNotApplicable(text: string): boolean {
+  const t = text
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/```[a-zA-Z]*/g, "")
+    .trim();
+  return /^[\W_]*NOT_APPLICABLE[\W_]*$/i.test(t) || (t.length < 80 && /NOT_APPLICABLE/i.test(t));
 }
 
 export function llmGenerator(
   llm: LlmClient,
   maxTokens = DEFAULT_MAX_TOKENS,
   task?: PackageTask | null,
+  info?: PackageInfo,
 ): Generator {
-  const system = systemPrompt(task);
   const entry = task?.entry ?? "csv2json.mjs";
+  const pkg: PackageInfo =
+    info ?? (task ? { id: task.id, description: task.description } : V1_INFO);
   return async (spec, retry, hooks, limits) => {
+    const prefix = `This delivery is checked by ${pkg.id} against the task: ${spec}.`;
     const r = await llm.generateText(
       [
-        { role: "system", content: system },
-        { role: "user", content: `Task: ${spec}` },
+        { role: "system", content: fullPrompt(spec, pkg, task) },
+        { role: "user", content: `The paid task is: ${spec}` },
         ...(retry
           ? [
               {
@@ -129,7 +178,7 @@ export function llmGenerator(
               },
               {
                 role: "user" as const,
-                content: `The automatic test rejected that file:\n${retry.feedback}\nFind the bug in at most a few lines of reasoning, then reply with the complete corrected file in one fenced code block.`,
+                content: `${retry.feedback.startsWith(prefix) ? "" : `${prefix}\n`}The automatic test rejected that file:\n${retry.feedback}\nFind the bug in at most a few lines of reasoning, then reply with the complete corrected file in one fenced code block.`,
               },
             ]
           : []),
@@ -141,6 +190,7 @@ export function llmGenerator(
         ...(hooks?.onThinking ? { onThinking: hooks.onThinking } : {}),
       },
     );
+    if (isNotApplicable(r.text)) throw new NotApplicableError(pkg.id, pkg.description);
     const code = extractCode(r.text);
     if (code.trim().length < 20) throw new NoCodeError();
     return {
