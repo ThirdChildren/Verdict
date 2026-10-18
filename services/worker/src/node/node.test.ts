@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FakeLlm } from "@verdict/llm";
 import {
   createEd25519Signer,
   type Envelope,
@@ -11,7 +12,7 @@ import {
 } from "@verdict/protocol";
 import { FakeHub, FakeWallet } from "@verdict/wallet";
 import { describe, expect, it } from "vitest";
-import { extractCode } from "../agent/generate.js";
+import { extractCode, type Generator, llmGenerator } from "../agent/generate.js";
 import { WorkerNode } from "./node.js";
 
 const seed = (n: number) => new Uint8Array(32).fill(n);
@@ -27,6 +28,8 @@ async function setup(
     packageSha?: string;
     /** Switch position when the escrow locks (the node reads it once, at task start). */
     disappears?: boolean;
+    /** Replaces the fake generator; the directory asked for is still recorded. */
+    generator?: Generator;
   } = {},
 ) {
   const [engine, worker, ver] = await Promise.all(
@@ -51,6 +54,7 @@ async function setup(
     precision: 2,
     generatorFor: (dir) => {
       dirsUsed.push(dir);
+      if (over.generator) return over.generator;
       return async () => ({
         files: [{ path: "csv2json.mjs", content: "console.log('[]');\n" }],
         model: "fake",
@@ -264,6 +268,17 @@ describe("WorkerNode with a verifier", () => {
   it("resolves the package directory of the contract's hash for the generator", async () => {
     const { t } = await delivered();
     expect(t.dirsUsed).toEqual(["/pkg/a"]);
+  });
+
+  it("a NOT_APPLICABLE reply delivers nothing and the task fails", async () => {
+    const llm = new FakeLlm(["NOT_APPLICABLE"]);
+    const { t } = await delivered({
+      generator: llmGenerator(llm, 100, null, { id: "csv2json-v1", description: "CSV to JSON" }),
+    });
+    const task = t.node.list()[0];
+    expect(task?.state).toBe("FAILED");
+    expect(t.posted.map((p) => p.type)).not.toContain("DELIVER");
+    expect(llm.calls).toHaveLength(1);
   });
 
   it("waits for P_CONFIRM, delivers a signed DELIVER bundle to the contract's verifier, then claims with P after RELEASE", async () => {

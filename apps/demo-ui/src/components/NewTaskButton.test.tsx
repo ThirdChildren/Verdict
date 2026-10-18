@@ -145,4 +145,31 @@ describe("NewTaskButton task types", () => {
     expect(body).toContain('"package_id":"json-normalise-v1"');
     expect(body).toContain('"request":"convert a CSV file into JSON"');
   });
+  it("renders a refusal from the engine's 422 in place, with the list and no buyer goal call", async () => {
+    const calls = stubFetch(
+      () => json(200, { task_types: MOCK_TASK_TYPES }),
+      (url) =>
+        url.endsWith("/api/route")
+          ? json(200, { ok: true, package_id: "csv2json-v1", reason: "CSV in, JSON out." })
+          : json(422, {
+              ok: false,
+              code: "TASK_NOT_VERIFIABLE",
+              message: "Engine says: Verdict only buys work it can verify.",
+            }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    const alert = await waitFor(() => {
+      const a = within(d)
+        .getAllByRole("alert")
+        .find((x) => /Engine says: Verdict only buys work/.test(x.textContent ?? ""));
+      if (!a) throw new Error("no refusal yet");
+      return a;
+    });
+    expect(within(alert).getByText("json-normalise-v1")).toBeTruthy();
+    expect(calls.some((c) => c.url.endsWith("/api/mandate/task"))).toBe(true);
+    expect(calls.some((c) => c.url.endsWith("/api/plan"))).toBe(false);
+    expect(within(d).queryByRole("dialog")).toBeNull();
+  });
 });

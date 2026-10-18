@@ -426,6 +426,18 @@ describe("package catalogue (E31 AC13)", () => {
     }
   });
 
+  it("accepts both catalogue hashes by name (the loop above cannot pass vacuously)", async () => {
+    const catalogue = await Catalogue.fromRoot(ROOT);
+    const ctx = await setup({ catalogue });
+    for (const id of ["csv2json-v1", "json-normalise-v1"]) {
+      const e = catalogue.list().find((x) => x.id === id);
+      expect(e?.usable).toBe(true);
+      expect(
+        (await deposit(ctx, { packageSha: (e as { hash: string }).hash })).answer,
+      ).toMatchObject({ ok: true });
+    }
+  });
+
   it("refuses an unknown hash without listing anything", async () => {
     const ctx = await setup({ catalogue: await Catalogue.fromRoot(ROOT) });
     const d = await deposit(ctx, { packageSha: "b".repeat(64) });

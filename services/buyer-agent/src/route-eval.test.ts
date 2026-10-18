@@ -36,3 +36,21 @@ describe("route-eval plumbing", () => {
     expect([r.correct, r.falseRejects, r.falseAccepts]).toEqual([8, 16, 0]);
   });
 });
+
+describe("route-cases.json shape", () => {
+  test("24 entries, 8 per label, each with a non-empty request and a known label", () => {
+    const labels = ["csv2json-v1", "json-normalise-v1", "none"];
+    expect(cases).toHaveLength(24);
+    for (const l of labels) expect(cases.filter((c) => c.label === l)).toHaveLength(8);
+    for (const c of cases) {
+      expect(c.request.trim().length).toBeGreaterThan(0);
+      expect(labels).toContain(c.label);
+    }
+  });
+
+  test("the FakeLlm plumbing routes every case to its own label", async () => {
+    const llm = new FakeLlm(cases.map((c) => ({ package_id: c.label, reason: "ok" })));
+    const r = await runRouteEval(new BuyerAgent({ llm, workers: {} }), cases, TYPES);
+    expect(r.rows.every((x) => x.got === x.label)).toBe(true);
+  });
+});
