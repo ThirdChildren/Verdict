@@ -156,34 +156,51 @@ export class BuyerAgent {
         "AUTHOR_FAILED",
         `I could not write a usable test for this request (${why}). Nothing was installed.`,
       );
-    let v: z.infer<typeof authorSchema>;
-    try {
-      v = (
-        await this.cfg.llm.structured(
-          authorSchema,
-          [
-            { role: "system", content: AUTHOR_SYSTEM },
-            { role: "user", content: `Request: ${request}` },
-          ],
-          { name: "author", maxTokens: 4000, timeoutMs: timeoutFor(this.cfg, AUTHOR_TIMEOUT_MS) },
-        )
-      ).value;
-    } catch (err) {
-      if (err instanceof LlmTimeoutError) throw failed("the local model took too long");
-      if (err instanceof LlmError) throw failed("the model's answer was not a valid test");
-      throw err;
-    }
+    const deadline = Date.now() + timeoutFor(this.cfg, AUTHOR_TIMEOUT_MS);
+    const attempt = async (complaint?: string): Promise<z.infer<typeof authorSchema>> => {
+      const left = Math.max(1, deadline - Date.now());
+      const user = complaint
+        ? `Request: ${request}\n\nYour previous draft was rejected: ${complaint}. Every visible and hidden input must be distinct, every expected output non-empty, and outputs must not all be equal.`
+        : `Request: ${request}`;
+      try {
+        return (
+          await this.cfg.llm.structured(
+            authorSchema,
+            [
+              { role: "system", content: AUTHOR_SYSTEM },
+              { role: "user", content: user },
+            ],
+            { name: "author", maxTokens: 4000, timeoutMs: left },
+          )
+        ).value;
+      } catch (err) {
+        if (err instanceof LlmTimeoutError) throw failed("the local model took too long");
+        if (err instanceof LlmError) throw failed("the model's answer was not a valid test");
+        throw err;
+      }
+    };
+    const build = (v: z.infer<typeof authorSchema>) => ({
+      feasibility: v.feasibility as "cli" | "reframe",
+      reason: v.reason,
+      ...(v.reframe !== undefined ? { reframe: v.reframe } : {}),
+      draft: cleanDraft(v),
+    });
+    let v = await attempt();
     if (v.feasibility === "none") throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
     try {
-      return {
-        feasibility: v.feasibility,
-        reason: v.reason,
-        ...(v.reframe !== undefined ? { reframe: v.reframe } : {}),
-        draft: cleanDraft(v),
-      };
+      return build(v);
     } catch (err) {
-      if (err instanceof DraftError) throw failed(err.message);
-      throw err;
+      if (!(err instanceof DraftError)) throw err;
+      const complaint = err.message;
+      v = await attempt(complaint);
+      if (v.feasibility === "none")
+        throw new AgentError("TASK_NOT_VERIFIABLE", NOT_VERIFIABLE_TEXT);
+      try {
+        return build(v);
+      } catch (err2) {
+        if (err2 instanceof DraftError) throw failed(err2.message);
+        throw err2;
+      }
     }
   }
 

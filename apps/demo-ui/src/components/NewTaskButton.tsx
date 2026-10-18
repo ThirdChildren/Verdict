@@ -69,6 +69,12 @@ export function taskFormSchema(remaining: string, precision: number) {
 }
 type TaskForm = z.infer<ReturnType<typeof taskFormSchema>>;
 
+/** Appends the reassurance unless the message already ends with it. */
+export function withNothingInstalled(m: string): string {
+  const t = m.trimEnd();
+  return t.endsWith("Nothing was installed.") ? t : `${t} Nothing was installed.`;
+}
+
 /** "New task" button and its dialog. `openSignal` lets a keyboard shortcut open it. */
 export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const id = useId();
@@ -86,6 +92,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
     reason?: string | undefined;
   } | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  // CHECK disagreed with the selected type: information, not a refusal.
+  const [disagree, setDisagree] = useState<{ reason: string } | null>(null);
   // The raw body of the last failed answer, for the operator.
   const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const noteAnswer = (err: unknown) =>
@@ -154,6 +162,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setRefusal(null);
       setChosen(null);
       setMapped(null);
+      setDisagree(null);
       setDraft(null);
       setEdits(null);
       setAuthorError(null);
@@ -172,6 +181,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
     setRefusal(null);
     setFailure(null);
     setMapped(null);
+    setDisagree(null);
     setLastAnswer(null);
     try {
       const r = await route.mutateAsync(description.trim());
@@ -180,13 +190,18 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
     } catch (err) {
       noteAnswer(err);
       if (err instanceof ApiError && isUnverifiable(err.code)) {
-        setRefusal({
-          message: err.message,
-          types: err.taskTypes ?? null,
-          reason: err.detail.reason,
-        });
-        // None matched: offer the way out at once, by writing the acceptance test.
-        void writeTest();
+        if (selectedType !== null) {
+          // The user's selection stands; the disagreement is shown as information.
+          setDisagree({ reason: err.detail.reason ?? "" });
+        } else {
+          setRefusal({
+            message: err.message,
+            types: err.taskTypes ?? null,
+            reason: err.detail.reason,
+          });
+          // None matched and nothing is selected: offer the way out, by writing the acceptance test.
+          void writeTest();
+        }
       } else setFailure(explainError(err, "Something went wrong."));
     }
   };
@@ -356,6 +371,37 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                   {mapped.reason ? `: ${mapped.reason}` : "."}
                 </p>
               )}
+              {disagree && selectedType && (
+                <p role="status" className="text-base">
+                  The buyer agent would map this text to none
+                  {disagree.reason ? `: ${disagree.reason}` : "."} Your selection (
+                  {list.find((t) => t.id === selectedType)?.title}) stands; START TASK uses it, and
+                  the worker will refuse the job if it cannot be verified by that test.
+                  {(() => {
+                    const alt = list.find(
+                      (t) =>
+                        t.id !== selectedType &&
+                        (disagree.reason.toLowerCase().includes(t.id.toLowerCase()) ||
+                          disagree.reason.toLowerCase().includes(t.title.toLowerCase())),
+                    );
+                    return alt ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="font-semibold underline"
+                          onClick={() => {
+                            setChosen(alt.id);
+                            setDisagree(null);
+                          }}
+                        >
+                          Use {alt.title} instead
+                        </button>
+                      </>
+                    ) : null;
+                  })()}
+                </p>
+              )}
               {installed && (
                 <p role="status" className="text-base font-semibold">
                   Installed: <span className="font-mono">custom · {hash8(installed.sha)}</span>{" "}
@@ -454,7 +500,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
             )}
             {authorError && (
               <p role="alert" className="font-semibold">
-                {authorError} Nothing was installed.
+                {withNothingInstalled(authorError)}
               </p>
             )}
             {draft && edits && (

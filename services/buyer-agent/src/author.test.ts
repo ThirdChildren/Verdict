@@ -134,6 +134,39 @@ describe("POST /api/author", () => {
     expect(r.json().code).toBe("AUTHOR_FAILED");
   });
 
+  test("hygiene failure retries once with the complaint, then succeeds", async () => {
+    const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
+    const llm = new FakeLlm([dup, draft()]);
+    const app = buildServer({ logger: false, llm, workers: {} });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/author",
+      payload: { request: "snake" },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(200);
+    expect(llm.calls).toHaveLength(2);
+    const last = JSON.stringify(llm.calls[1]?.messages);
+    expect(last).toContain("Your previous draft was rejected: two test cases use the same input");
+  });
+
+  test("two hygiene failures answer AUTHOR_FAILED with the plain message", async () => {
+    const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
+    const r = await post([dup, dup]);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("AUTHOR_FAILED");
+    expect(r.json().message).toContain("two test cases use the same input");
+  });
+
+  test("one timeout bounds both author calls", async () => {
+    const dup = draft({ hidden: [...pairs(4, "h"), { input: "v0 1", expected: "9" }] });
+    const t0 = Date.now();
+    const r = await post([dup, draft()], "sum two numbers", { delayMs: 40, llmTimeoutMs: 60 });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().message).toContain("took too long");
+    expect(Date.now() - t0).toBeLessThan(300);
+  });
+
   test("strips code fences from cases", async () => {
     const d = draft({
       hidden: [...pairs(4, "h"), { input: "```\n4 5\n```", expected: "```text\n9\n```" }],

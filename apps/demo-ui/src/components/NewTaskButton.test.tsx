@@ -153,17 +153,18 @@ describe("NewTaskButton task types", () => {
   });
   it("renders a routing refusal from Check in place, with the reason and the raw last answer", async () => {
     const calls = stubFetch(
-      () => json(200, { task_types: MOCK_TASK_TYPES }),
+      () => json(200, { task_types: [] }),
       () =>
         json(422, {
           ok: false,
           code: "TASK_NOT_VERIFIABLE",
           message: "Verdict only buys work it can verify.",
           reason: "No type reads a poem.",
+          task_types: [{ id: "csv2json-v1", title: "CSV to JSON" }],
         }),
     );
     const d = await open();
-    await within(d).findAllByRole("radio");
+    await within(d).findByText(/offers no task type/i);
     fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
     const alert = await waitFor(() => {
       const a = within(d)
@@ -391,15 +392,25 @@ describe("NewTaskButton acceptance test", () => {
     const { feasibility, reason, ...rest } = draft();
     return json(200, { ok: true, feasibility, reason, ...top, draft: rest });
   };
-  const stub = (author: () => Promise<Response>, install: () => Promise<Response>) => {
+  const stub = (
+    author: () => Promise<Response>,
+    install: () => Promise<Response>,
+    types: unknown[] = MOCK_TASK_TYPES,
+    routeReason?: string,
+  ) => {
     const posted: { url: string; body: string }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string, init?: RequestInit) => {
-        if (init?.method !== "POST") return json(200, { task_types: MOCK_TASK_TYPES });
+        if (init?.method !== "POST") return json(200, { task_types: types });
         posted.push({ url, body: String(init.body) });
         if (url.endsWith("/api/route"))
-          return json(422, { ok: false, code: "TASK_NOT_VERIFIABLE", message: "No type matches." });
+          return json(422, {
+            ok: false,
+            code: "TASK_NOT_VERIFIABLE",
+            message: "No type matches.",
+            ...(routeReason ? { reason: routeReason } : {}),
+          });
         return url.endsWith("/api/author") ? author() : install();
       }),
     );
@@ -415,6 +426,7 @@ describe("NewTaskButton acceptance test", () => {
     stub(
       () => authorBody(),
       () => json(200, { ok: true }),
+      [],
     );
     const d = await open();
     await fill(d, "sum two numbers");
@@ -426,6 +438,67 @@ describe("NewTaskButton acceptance test", () => {
     expect(within(panel).getByText("Must not contain: error")).toBeTruthy();
     expect(within(panel).getAllByRole("textbox")).toHaveLength(2 + 6);
   });
+  it("with a type selected, a none answer is information: no author call, no refusal block", async () => {
+    const posted = stub(
+      () => authorBody(),
+      () => json(200, { ok: true }),
+      MOCK_TASK_TYPES,
+      "No type reads a poem.",
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    await fill(d, "write a poem");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findByText(/would map this text to none: No type reads a poem\./);
+    expect(within(d).getByText(/stands; START TASK uses it/)).toBeTruthy();
+    expect(within(d).queryByText("Nothing was sent.")).toBeNull();
+    expect(posted.some((c) => c.url.endsWith("/api/author"))).toBe(false);
+  });
+
+  it("with no type selected, a none answer launches WRITE A TEST", async () => {
+    const posted = stub(
+      () => authorBody(),
+      () => json(200, { ok: true }),
+      [],
+    );
+    const d = await open();
+    await fill(d, "sum two numbers");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    expect(posted.some((c) => c.url.endsWith("/api/author"))).toBe(true);
+  });
+
+  it("offers 'Use <title> instead' when the reason names another type, and switches", async () => {
+    stub(
+      () => authorBody(),
+      () => json(200, { ok: true }),
+      MOCK_TASK_TYPES,
+      `This is about ${MOCK_TASK_TYPES[1]?.title ?? ""}.`,
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    await fill(d, "something");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    const sw = await within(d).findByRole("button", { name: /^use .* instead$/i });
+    fireEvent.click(sw);
+    const radios = within(d).getAllByRole("radio") as HTMLInputElement[];
+    expect(radios[1]?.checked).toBe(true);
+  });
+
+  it("does not double 'Nothing was installed.'", async () => {
+    stub(
+      () =>
+        json(422, { ok: false, code: "DRAFT_REJECTED", message: "Bad. Nothing was installed." }),
+      () => json(200, { ok: true }),
+      [],
+    );
+    const d = await open();
+    await fill(d, "sum two numbers");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    await within(d).findAllByText(/Nothing was installed\./);
+    expect(d.textContent).not.toMatch(/Nothing was installed\. Nothing was installed\./);
+  });
+
   it("reads an empty assertions object and counts the rules after install", async () => {
     stub(
       () => {
