@@ -9,15 +9,37 @@ export interface PackageEntry {
   readonly dir: string;
   readonly hash: string;
   readonly format: number;
+  readonly title: string;
   readonly description: string;
 }
 
 /** What the UI may see (no directory). */
 export interface TaskTypeView {
   id: string;
+  title: string;
   description: string;
   format: number;
   package_sha256: string;
+}
+
+/** Built-in human titles for packages whose manifest has none and whose README heading is just the id. */
+export const FALLBACK_TITLES: Readonly<Record<string, string>> = {
+  "csv2json-v1": "Convert a CSV file into a JSON array of objects",
+  "json-normalise-v1": "Canonical JSON",
+};
+
+/** Short human title: manifest title, else README first line (no #, under 80 chars, not just the id), else fallback map, else id. */
+export function resolveTitle(id: string, manifestTitle: unknown, dir: string): string {
+  if (typeof manifestTitle === "string" && manifestTitle.trim() !== "")
+    return manifestTitle.trim().slice(0, 60);
+  try {
+    const first = readFileSync(join(dir, "README.md"), "utf8").split(/\r?\n/, 1)[0] ?? "";
+    const t = first.replace(/^\s*#+\s*/, "").trim();
+    if (t !== "" && t.length < 80 && t !== id) return t.slice(0, 60);
+  } catch {
+    // no README
+  }
+  return FALLBACK_TITLES[id]?.slice(0, 60) ?? id;
 }
 
 /** Repository root's verifier-packages, independent of the process cwd (src/ or dist/ is three levels below it). */
@@ -115,10 +137,13 @@ export async function scanCatalogue(
       const m = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as {
         id?: unknown;
         description?: unknown;
+        title?: unknown;
         format?: unknown;
       };
+      const id = typeof m.id === "string" && m.id !== "" ? m.id : basename(dir);
       out.push({
-        id: typeof m.id === "string" && m.id !== "" ? m.id : basename(dir),
+        id,
+        title: resolveTitle(id, m.title, dir),
         dir,
         hash: await dirHashFromDisk(dir),
         format: typeof m.format === "number" ? m.format : 1,
@@ -224,15 +249,14 @@ export class Catalogue {
   view(): TaskTypeView[] {
     return this.entries.map((e) => ({
       id: e.id,
+      title: e.title,
       description: e.description,
       format: e.format,
       package_sha256: e.hash,
     }));
   }
-  /** "csv2json-v1 (…), json-normalise-v1 (…)" for refusal messages. */
+  /** "Title one; Title two" for refusal messages (titles only). */
   describe(): string {
-    return this.entries
-      .map((e) => (e.description ? `${e.id} (${e.description})` : e.id))
-      .join(", ");
+    return this.entries.map((e) => e.title).join("; ");
   }
 }

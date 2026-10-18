@@ -26,7 +26,7 @@ export type ServerDeps = {
   workers?: WorkerDirectory;
   /** Hash of the child capability the engine bound to this buyer; null until one is registered. */
   /** Catalogue source for routing (main.ts passes engine.fetchTaskTypes). Absent: no routing. */
-  taskTypes?: () => Promise<{ id: string; description: string }[]>;
+  taskTypes?: () => Promise<{ id: string; description: string; title?: string }[]>;
   getCapHash?: () => Promise<string | null>;
   getActiveCap?: () => Promise<ActiveCap | null>;
   now?: () => Date;
@@ -137,7 +137,7 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           ok: false,
           code: err.code,
           message: err.message,
-          task_types: types.map((t) => t.id),
+          task_types: types.map((t) => ({ id: t.id, title: t.title ?? t.id })),
         };
       }
       return guard(reply, err);

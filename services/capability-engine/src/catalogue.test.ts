@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { createEd25519Signer, offeredContractSchema, spendIntentSchema } from "@verdict/protocol";
 import { dirHashFromDisk } from "@verdict/protocol/node";
 import { describe, expect, test } from "vitest";
-import { Catalogue, intersectWithVerifier, loadCatalogue, scanCatalogue } from "./catalogue.js";
+import {
+  Catalogue,
+  intersectWithVerifier,
+  loadCatalogue,
+  resolveTitle,
+  scanCatalogue,
+} from "./catalogue.js";
 import { EventBus } from "./events.js";
 import { Ledger } from "./ledger/index.js";
 import { OfferService } from "./offer.js";
@@ -33,6 +39,7 @@ test("lists every package except _judge with its dir hash", async () => {
   expect(es[0]?.hash).toBe(await dirHashFromDisk(join(root, "csv2json-v1")));
   expect(new Catalogue(es).view()[0]).toEqual({
     id: "csv2json-v1",
+    title: "Convert a CSV file into a JSON array of objects",
     description: "CSV to JSON",
     format: 1,
     package_sha256: es[0]?.hash,
@@ -245,4 +252,21 @@ describe("catalogue root and verifier probe", () => {
     expect(await makeVerifierProbe(undefined)()).toBe(false);
     expect(hostOnly("http://user:pw@10.0.0.2:7402/v0?k=1")).toBe("10.0.0.2:7402");
   });
+});
+
+test("title sources: manifest, README first line, fallback map, id", () => {
+  const root = mkdtempSync(join(tmpdir(), "titles-"));
+  const mk = (name: string, readme?: string) => {
+    mkdirSync(join(root, name));
+    if (readme !== undefined) writeFileSync(join(root, name, "README.md"), readme);
+    return join(root, name);
+  };
+  expect(resolveTitle("x", "From manifest", mk("a", "# Readme"))).toBe("From manifest");
+  expect(resolveTitle("x", undefined, mk("b", "# Readme heading\n\nbody"))).toBe("Readme heading");
+  expect(resolveTitle("x", undefined, mk("c", `# ${"y".repeat(90)}`))).toBe("x");
+  expect(resolveTitle("csv2json-v1", undefined, mk("d", "# csv2json-v1\n"))).toBe(
+    "Convert a CSV file into a JSON array of objects",
+  );
+  expect(resolveTitle("zzz", undefined, mk("e"))).toBe("zzz");
+  expect(resolveTitle("x", "m".repeat(90), mk("f")).length).toBe(60);
 });

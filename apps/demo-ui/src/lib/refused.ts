@@ -35,7 +35,7 @@ export function parseRefusedEvent(raw: unknown): TaskRefusal | null {
   // Entries are full objects or bare ids.
   const listed = Array.isArray(b.data.task_types) ? b.data.task_types : [];
   const entries = listed.map((t) =>
-    typeof t === "string" ? { id: t, description: "", format: 1 } : t,
+    typeof t === "string" ? { id: t, title: t, description: "", format: 1 } : t,
   );
   const types = parseTaskTypes({ task_types: entries }) ?? [];
   return { reason: b.data.reason, task_types: types, ...(b.data.at ? { at: b.data.at } : {}) };

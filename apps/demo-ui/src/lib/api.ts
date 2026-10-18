@@ -7,6 +7,7 @@ import {
   DEFAULT_TASK_TYPES,
   parseTaskTypes,
   parseVerifierInfo,
+  type TaskType,
   type TaskTypeCatalogue,
 } from "./taskTypes.js";
 import { fetchWorkerDelivery } from "./workerApi.js";
@@ -69,6 +70,8 @@ export class ApiError extends Error {
     message: string,
     /** Set when the signer asks for a second confirmation (HTTP 428). Single use, 120 s. */
     readonly confirmToken?: string,
+    /** Task types listed in a refusal body (`task_types: [{ id, title }]`), when present. */
+    readonly taskTypes?: TaskType[],
   ) {
     super(message);
   }
@@ -115,6 +118,7 @@ async function post(
       parsed.data.code ?? "ERROR",
       parsed.data.message ?? "The request was refused.",
       parsed.data.confirm_token,
+      parseTaskTypes(json) ?? undefined,
     );
   return json;
 }

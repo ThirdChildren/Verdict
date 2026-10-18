@@ -25,12 +25,13 @@ Report the amount and limits the goal states, even if they look unreasonable: a 
 Example goal: "Get a CSV to JSON converter built for 1.20 tUSD within 2 hours"
 Example output: {"kind":"task_payment","worker":"worker","category":"code","amount_minor":120,"recurring":false,"interval":"none","task_spec":"Build a CSV to JSON converter CLI","deadline_minutes":120,"rationale":"Hiring the worker for a small one-off coding task."}`;
 
-export type RouteTaskType = { id: string; description: string };
+export type RouteTaskType = { id: string; description: string; title?: string };
 
 /** Catalogue used when the engine has no /api/task-types (older engine): the one original package. */
 export const DEFAULT_TASK_TYPES: RouteTaskType[] = [
   {
     id: "csv2json-v1",
+    title: "CSV to JSON converter",
     description: "A command line tool that converts a CSV file to a JSON array of objects.",
   },
 ];

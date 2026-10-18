@@ -642,8 +642,13 @@ test("refuses an unknown or missing package_id: 422, nothing registered, only a 
     expect(r.statusCode).toBe(422);
     const j = r.json() as { ok: boolean; code: string; message: string };
     expect(j).toMatchObject({ ok: false, code: "TASK_NOT_VERIFIABLE" });
-    expect(j.message).toContain("csv2json-v1 (CSV to JSON)");
-    expect(j.message).toContain("json-normalise-v1");
+    expect(j.message).toBe(
+      "Verdict only buys work it can verify. Task types today: Convert a CSV file into a JSON array of objects; Canonical JSON. Nothing was sent.",
+    );
+    expect((j as unknown as { task_types: unknown }).task_types).toEqual([
+      { id: "csv2json-v1", title: "Convert a CSV file into a JSON array of objects" },
+      { id: "json-normalise-v1", title: "Canonical JSON" },
+    ]);
   }
   expect(s.ledger.latestChild()).toBe(before);
   expect(seen).toEqual(["TASK_REFUSED", "TASK_REFUSED", "TASK_REFUSED"]);

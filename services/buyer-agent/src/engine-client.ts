@@ -36,15 +36,17 @@ export class EngineClient {
   }
 
   /** Task types the engine can verify. A 404 (older engine) means csv2json-v1 only. */
-  async fetchTaskTypes(): Promise<{ id: string; description: string; format?: number }[]> {
+  async fetchTaskTypes(): Promise<
+    { id: string; description: string; title?: string; format?: number }[]
+  > {
     const res = await this.fetchFn(`${this.o.baseUrl}/api/task-types`, {
       signal: AbortSignal.timeout(5_000),
     });
     if (res.status === 404) return DEFAULT_TASK_TYPES;
     if (!res.ok) throw new Error(`task-types answered ${res.status}`);
     const b = (await res.json()) as {
-      types?: { id: string; description: string }[];
-      task_types?: { id: string; description: string }[];
+      types?: { id: string; description: string; title?: string }[];
+      task_types?: { id: string; description: string; title?: string }[];
     };
     const list = b.types ?? b.task_types;
     if (!Array.isArray(list)) throw new Error("task-types: bad body");

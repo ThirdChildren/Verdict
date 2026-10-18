@@ -224,3 +224,58 @@ describe("NewTaskButton task types", () => {
     expect(within(d).queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("task type list and refusal", () => {
+  it("shows the title as the label, the id muted, and the description only under Details", async () => {
+    stubFetch(
+      () => json(200, { task_types: MOCK_TASK_TYPES }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    expect(within(d).getByText("Normalise a JSON document")).toBeTruthy();
+    const summaries = within(d).getAllByText(/Details/);
+    expect(summaries).toHaveLength(2);
+    const det = summaries[1]?.closest("details");
+    expect(det?.open).toBe(false);
+    fireEvent.click(summaries[1] as HTMLElement);
+    expect(det?.open).toBe(true);
+    expect(within(det as HTMLElement).getByText(/sorted keys/)).toBeTruthy();
+  });
+  it("falls back to the id when the engine sends no title", async () => {
+    stubFetch(
+      () => json(200, { task_types: [{ id: "old-v1", description: "" }] }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    expect(within(d).getByText("old-v1", { selector: ".font-semibold" })).toBeTruthy();
+    expect(within(d).queryByText(/Details/)).toBeNull();
+  });
+  it("lists the types once in a refusal, from the body titles, without the long description", async () => {
+    stubFetch(
+      () => json(200, { task_types: MOCK_TASK_TYPES }),
+      () =>
+        json(422, {
+          ok: false,
+          code: "TASK_NOT_VERIFIABLE",
+          message: "Only these kinds of work can be verified.",
+          task_types: [{ id: "csv2json-v1", title: "Refusal title one" }],
+        }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    const alert = await waitFor(() => {
+      const a = within(d)
+        .getAllByRole("alert")
+        .find((x) => /Only these kinds/.test(x.textContent ?? ""));
+      if (!a) throw new Error("no refusal yet");
+      return a;
+    });
+    expect(within(alert).getAllByText(/Refusal title one/)).toHaveLength(1);
+    expect(within(alert).queryByText(/sorted keys/)).toBeNull();
+    expect(within(alert).getAllByText("Nothing was sent.")).toHaveLength(1);
+    expect(within(alert).getByText(/docs\/FAQ\.md/)).toBeTruthy();
+  });
+});

@@ -128,7 +128,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   const cat = opts.catalogue;
   /**
    * GET /api/task-types ->
-   * { ok: true, types: [{ id, description, format, package_sha256 }],
+   * { ok: true, types: [{ id, title, description, format, package_sha256 }],
    *   verifier_reachable: boolean,   // /v0/packages answered within 2 s (cached 10 s)
    *   verifier_url: string | null }  // host[:port] only, no scheme, credentials or path
    */

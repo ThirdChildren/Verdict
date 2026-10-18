@@ -9,7 +9,7 @@ import { buildServer } from "./server.js";
 
 const WORKERS = { worker: `eip191:0x${"b".repeat(40)}` };
 const TYPES = [
-  { id: "csv2json-v1", description: "Convert CSV to JSON." },
+  { id: "csv2json-v1", title: "CSV to JSON converter", description: "Convert CSV to JSON." },
   { id: "json-normalise-v1", description: "Canonical JSON." },
 ];
 const now = () => new Date("2026-10-18T15:00:00Z");
@@ -64,7 +64,9 @@ describe("routing", () => {
     expect(err).toBeInstanceOf(AgentError);
     expect(err.code).toBe("TASK_NOT_VERIFIABLE");
     expect(err.message).toContain("Verdict only buys work it can verify. Task types today:");
-    expect(err.message).toContain("csv2json-v1");
+    expect(err.message).toBe(
+      "Verdict only buys work it can verify. Task types today: CSV to JSON converter; json-normalise-v1. Nothing was sent.",
+    );
     expect(err.message).toContain("Nothing was sent.");
     expect(llm.calls).toHaveLength(1);
   });
@@ -157,7 +159,10 @@ describe("routing", () => {
     expect(no.json()).toMatchObject({
       ok: false,
       code: "TASK_NOT_VERIFIABLE",
-      task_types: ["csv2json-v1", "json-normalise-v1"],
+      task_types: [
+        { id: "csv2json-v1", title: "CSV to JSON converter" },
+        { id: "json-normalise-v1", title: "json-normalise-v1" },
+      ],
     });
   });
 });

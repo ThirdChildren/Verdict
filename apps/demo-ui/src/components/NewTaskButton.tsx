@@ -71,7 +71,9 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [sent, setSent] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   // A refusal ("this cannot be verified") is not a failure: nothing was sent, and the choices are listed.
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<{ message: string; types: TaskType[] | null } | null>(
+    null,
+  );
   const [chosen, setChosen] = useState<string | null>(null);
   // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
   const remaining = budget?.remaining ?? root?.max_total ?? "0";
@@ -130,7 +132,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setMapped({ id: r.package_id, reason: r.reason });
       setChosen(r.package_id);
     } catch (err) {
-      if (err instanceof ApiError && isUnverifiable(err.code)) setRefusal(err.message);
+      if (err instanceof ApiError && isUnverifiable(err.code))
+        setRefusal({ message: err.message, types: err.taskTypes ?? null });
       else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
     }
   };
@@ -146,7 +149,8 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setSent(`Task sent: ${v.amount} tUSD to ${worker}.`);
       setOpen(false);
     } catch (err) {
-      if (err instanceof ApiError && isUnverifiable(err.code)) setRefusal(err.message);
+      if (err instanceof ApiError && isUnverifiable(err.code))
+        setRefusal({ message: err.message, types: err.taskTypes ?? null });
       else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
     }
   });
@@ -216,10 +220,18 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                           onChange={() => setChosen(t.id)}
                         />
                         <span>
-                          <span className="font-mono text-sm font-semibold uppercase">{t.id}</span>
-                          <span className="block text-base">{t.description}</span>
+                          <span className="text-base font-semibold">{t.title}</span>{" "}
+                          <span className="font-mono text-sm uppercase text-subtle">{t.id}</span>
                         </span>
                       </label>
+                      {t.description && (
+                        <details className="pb-2 pl-6">
+                          <summary className="cursor-pointer text-sm text-subtle">
+                            Details ›
+                          </summary>
+                          <p className="text-base">{t.description}</p>
+                        </details>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -287,16 +299,21 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 role="alert"
                 className=" border border-rule-soft border-l-4 border-l-bad bg-card px-4 py-2"
               >
-                <p className="font-semibold">{refusal}</p>
+                <p className="font-semibold">{refusal.message}</p>
                 <p className="text-base">Task types available today:</p>
                 <ul>
-                  {list.map((t) => (
+                  {(refusal.types ?? list).map((t) => (
                     <li key={t.id} className="text-base">
-                      <span className="font-mono text-sm font-semibold uppercase">{t.id}</span>{" "}
-                      {t.description}
+                      {t.title}{" "}
+                      <span className="font-mono text-sm uppercase text-subtle">{t.id}</span>
                     </li>
                   ))}
                 </ul>
+                <p className="text-base text-subtle">
+                  To pay for a different kind of work, a test package for it must exist first: the
+                  verifier releases money only when a fixed test passes. See docs/FAQ.md, 'Can I ask
+                  for any task?'
+                </p>
                 <p className="text-base">Nothing was sent.</p>
               </div>
             )}

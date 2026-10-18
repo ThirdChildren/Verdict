@@ -297,7 +297,7 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
         // One entry and no choice made: that entry is the default (the single-package demo). Anything else must be named.
         chosen = wanted === undefined ? d.catalogue.defaultEntry : d.catalogue.byId(wanted);
         if (!chosen) {
-          const message = `Verdict only buys work it can verify. Task types available: ${d.catalogue.describe() || "none right now"}.`;
+          const message = `Verdict only buys work it can verify. Task types today: ${d.catalogue.describe() || "none right now"}. Nothing was sent.`;
           d.bus.publish(
             {
               type: "TASK_REFUSED",
@@ -306,7 +306,12 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
             d.now(),
           );
           reply.code(422);
-          return { ok: false, code: "TASK_NOT_VERIFIABLE", message };
+          return {
+            ok: false,
+            code: "TASK_NOT_VERIFIABLE",
+            message,
+            task_types: d.catalogue.entries.map((e) => ({ id: e.id, title: e.title })),
+          };
         }
       }
       const requested =

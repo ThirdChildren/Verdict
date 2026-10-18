@@ -3,6 +3,8 @@ import { z } from "zod";
 /** A kind of work the verifier can check, as the engine lists it (GET /api/task-types). */
 export interface TaskType {
   id: string;
+  /** Short human label; the id when an older engine sends none. */
+  title: string;
   description: string;
   format: number;
 }
@@ -11,6 +13,7 @@ export interface TaskType {
 export const DEFAULT_TASK_TYPES: TaskType[] = [
   {
     id: "csv2json-v1",
+    title: "Convert CSV to JSON",
     description: "Convert a CSV file into a JSON array of objects (all values as strings).",
     format: 1,
   },
@@ -19,6 +22,7 @@ export const DEFAULT_TASK_TYPES: TaskType[] = [
 const entry = z
   .object({
     id: z.string().min(1),
+    title: z.string().optional(),
     description: z.string().default(""),
     format: z.number().default(1),
   })
@@ -34,7 +38,12 @@ export function parseTaskTypes(raw: unknown): TaskType[] | null {
   if (!r.success) return null;
   const list = r.data.task_types ?? r.data.types;
   return list
-    ? list.map((t) => ({ id: t.id, description: t.description, format: t.format }))
+    ? list.map((t) => ({
+        id: t.id,
+        title: t.title?.trim() || t.id,
+        description: t.description,
+        format: t.format,
+      }))
     : null;
 }
 
@@ -80,6 +89,7 @@ export const MOCK_TASK_TYPES: TaskType[] = [
   ...DEFAULT_TASK_TYPES,
   {
     id: "json-normalise-v1",
+    title: "Normalise a JSON document",
     description: "Rewrite a JSON document with sorted keys and 2-space indentation.",
     format: 2,
   },

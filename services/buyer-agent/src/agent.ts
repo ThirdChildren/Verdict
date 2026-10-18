@@ -125,7 +125,7 @@ export class BuyerAgent {
     if (r.package_id === "none")
       throw new AgentError(
         "TASK_NOT_VERIFIABLE",
-        `Verdict only buys work it can verify. Task types today: ${types.map((t) => `${t.id} (${t.description})`).join("; ")}. Nothing was sent.`,
+        `Verdict only buys work it can verify. Task types today: ${types.map((t) => t.title ?? t.id).join("; ")}. Nothing was sent.`,
       );
     return r;
   }
