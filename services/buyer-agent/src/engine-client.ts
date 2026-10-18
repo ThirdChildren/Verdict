@@ -50,7 +50,9 @@ export class EngineClient {
     };
     const list = b.types ?? b.task_types;
     if (!Array.isArray(list)) throw new Error("task-types: bad body");
-    return list.filter((t) => typeof t.id === "string" && typeof t.description === "string");
+    return list
+      .filter((t) => typeof t.id === "string")
+      .map((t) => ({ ...t, description: typeof t.description === "string" ? t.description : "" }));
   }
 
   async submitIntent(intent: SpendIntent, capHash: string): Promise<EngineDecision> {

@@ -37,8 +37,10 @@ export class AgentError extends Error {
       | "AMOUNT_NOT_IN_GOAL"
       | "COUNTERPARTY_NOT_ALLOWED"
       | "TASK_NOT_VERIFIABLE"
-      | "AUTHOR_FAILED",
+      | "AUTHOR_FAILED"
+      | "CATALOGUE_UNAVAILABLE",
     message: string,
+    readonly reason?: string,
   ) {
     super(message);
     this.name = "AgentError";
@@ -137,6 +139,7 @@ export class BuyerAgent {
       throw new AgentError(
         "TASK_NOT_VERIFIABLE",
         `Verdict only buys work it can verify. Task types today: ${types.map((t) => t.title ?? t.id).join("; ")}. Nothing was sent.`,
+        r.reason,
       );
     return r;
   }
@@ -186,15 +189,21 @@ export class BuyerAgent {
 
   async planIntentWithThinking(
     goal: string,
+    boundPackageId?: string,
   ): Promise<{ intent: SpendIntent; thinking: string; route?: Route }> {
     let route: Route | undefined;
-    if (this.cfg.taskTypes) {
+    if (boundPackageId) {
+      route = {
+        package_id: boundPackageId,
+        reason: "routing skipped: package bound by the engine",
+      };
+    } else if (this.cfg.taskTypes) {
       let types: RouteTaskType[];
       try {
         types = await this.cfg.taskTypes();
       } catch {
         throw new AgentError(
-          "PLAN_FAILED",
+          "CATALOGUE_UNAVAILABLE",
           "The list of verifiable task types is not available, so nothing was sent.",
         );
       }

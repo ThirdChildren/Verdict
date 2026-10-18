@@ -1,7 +1,7 @@
 import { BLOCK_CODES, type BlockCode, verdictRecordSchema } from "@verdict/protocol";
 import { z } from "zod";
 import * as mock from "../mock/api.js";
-import { type Draft, type Installed, installedSchema, parseAuthorAnswer } from "./authoring.js";
+import { type Draft, type Installed, installedSchema, readAuthorAnswer } from "./authoring.js";
 import { type MandateRow, parseMandates, parseTaskRoots } from "./mandates.js";
 import { isMock } from "./mode.js";
 import {
@@ -65,6 +65,24 @@ export const goalResponseSchema = z
   });
 export type GoalResponse = z.infer<typeof goalResponseSchema>;
 
+export interface ApiDetail {
+  status?: number;
+  raw?: string;
+  reason?: string;
+}
+
+/** The raw body shown in "Last answer": at most 2 KB. */
+export const clipRaw = (text: string): string =>
+  text.length > 2048 ? `${text.slice(0, 2048)}\n... (cut at 2 KB)` : text;
+
+const rawOf = (value: unknown): string => {
+  try {
+    return clipRaw(JSON.stringify(value, null, 2) ?? "");
+  } catch {
+    return "";
+  }
+};
+
 export class ApiError extends Error {
   constructor(
     readonly code: string,
@@ -73,6 +91,8 @@ export class ApiError extends Error {
     readonly confirmToken?: string,
     /** Task types listed in a refusal body (`task_types: [{ id, title }]`), when present. */
     readonly taskTypes?: TaskType[],
+    /** What the service answered: HTTP status, the raw body (max 2 KB) and the routing `reason`, when present. */
+    readonly detail: ApiDetail = {},
   ) {
     super(message);
   }
@@ -109,18 +129,27 @@ async function post(
     })
     .passthrough()
     .safeParse(json);
+  const raw = json === null ? "" : rawOf(json);
   if (!parsed.success)
     throw new ApiError(
-      "BAD_RESPONSE",
-      "The service sent an answer this screen does not understand.",
+      res.ok ? "BAD_RESPONSE" : "HTTP_ERROR",
+      res.ok
+        ? "The service sent an answer this screen does not understand."
+        : `The service answered with status ${res.status}.`,
+      undefined,
+      undefined,
+      { status: res.status, raw },
     );
-  if (!parsed.data.ok)
+  if (!parsed.data.ok) {
+    const reason = (json as { reason?: unknown } | null)?.reason;
     throw new ApiError(
       parsed.data.code ?? "ERROR",
       parsed.data.message ?? "The request was refused.",
       parsed.data.confirm_token,
       parseTaskTypes(json) ?? undefined,
+      { status: res.status, raw, ...(typeof reason === "string" ? { reason } : {}) },
     );
+  }
   return json;
 }
 
@@ -265,9 +294,40 @@ export async function fetchTaskTypes(): Promise<TaskTypeCatalogue> {
 }
 
 /** Sends the goal of a new task to the buyer agent, under the already signed mandate. */
-export async function submitTaskGoal(goal: string): Promise<void> {
-  if (isMock()) return mock.submitTaskGoal();
-  await post(`${buyerBase()}/api/plan`, { goal });
+export async function submitTaskGoal(goal: string, packageId?: string): Promise<void> {
+  if (isMock()) return mock.submitTaskGoal(goal);
+  const json = await post(`${buyerBase()}/api/plan`, {
+    goal,
+    ...(packageId === undefined ? {} : { package_id: packageId }),
+  });
+  // The buyer answers 200 even when the engine refused: the verdict on the intent is in `decision`.
+  const d = z
+    .object({
+      decision: z
+        .object({ status: z.string(), code: z.string().optional(), message: z.string().optional() })
+        .passthrough(),
+    })
+    .passthrough()
+    .safeParse(json);
+  if (!d.success) return;
+  const { status, code, message } = d.data.decision;
+  const raw = rawOf(json);
+  if (status === "BLOCKED")
+    throw new ApiError(
+      code ?? "BLOCKED",
+      `The engine blocked the task: ${code ?? ""} ${message ?? ""}`.replace(/ +/g, " ").trim(),
+      undefined,
+      undefined,
+      { raw },
+    );
+  if (status === "ERROR")
+    throw new ApiError(
+      code ?? "ERROR",
+      `The buyer could not reach the engine: ${message ?? "no reason given"}`,
+      undefined,
+      undefined,
+      { raw },
+    );
 }
 
 const sha = z.string().regex(/^[0-9a-f]{64}$/);
@@ -445,10 +505,17 @@ export async function fetchPrincipal(): Promise<{ id: string }> {
 /** Asks the buyer agent to write an acceptance test for a request. Refusals (AUTHOR_FAILED, TASK_NOT_VERIFIABLE) are ApiErrors. */
 export async function authorTest(request: string): Promise<Draft> {
   if (isMock()) return mock.authorTest(request);
-  const draft = parseAuthorAnswer(await post(`${buyerBase()}/api/author`, { request }));
-  if (!draft)
-    throw new ApiError("BAD_RESPONSE", "The buyer agent sent a test this screen cannot read.");
-  return draft;
+  const json = await post(`${buyerBase()}/api/author`, { request });
+  const r = readAuthorAnswer(json);
+  if (!r.draft)
+    throw new ApiError(
+      "BAD_RESPONSE",
+      `The buyer agent's test could not be read: ${r.problem}`,
+      undefined,
+      undefined,
+      { raw: rawOf(json) },
+    );
+  return r.draft;
 }
 
 /** Installs a (possibly edited) draft as a task type on the engine. 422 DRAFT_REJECTED / 503 come back as ApiErrors. */

@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, engineBase } from "../lib/api.js";
-import { type Draft, hash8 } from "../lib/authoring.js";
+import { ApiError, clipRaw, engineBase } from "../lib/api.js";
+import { type Draft, hash8, rulesOf } from "../lib/authoring.js";
+import { explainError } from "../lib/explain.js";
 import { readOnlyReason } from "../lib/mandates.js";
 import { fromMinor, toMinor } from "../lib/money.js";
 import {
@@ -79,10 +80,16 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [sent, setSent] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   // A refusal ("this cannot be verified") is not a failure: nothing was sent, and the choices are listed.
-  const [refusal, setRefusal] = useState<{ message: string; types: TaskType[] | null } | null>(
-    null,
-  );
+  const [refusal, setRefusal] = useState<{
+    message: string;
+    types: TaskType[] | null;
+    reason?: string | undefined;
+  } | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  // The raw body of the last failed answer, for the operator.
+  const [lastAnswer, setLastAnswer] = useState<string | null>(null);
+  const noteAnswer = (err: unknown) =>
+    setLastAnswer(err instanceof ApiError && err.detail.raw ? clipRaw(err.detail.raw) : null);
   // The engine-reported remaining of the mandate is the ceiling for one task, never the task amount.
   const remaining = budget?.remaining ?? root?.max_total ?? "0";
   const readOnly = useStore((s) =>
@@ -111,9 +118,13 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
   const [edits, setEdits] = useState<Edits | null>(null);
   const [authorError, setAuthorError] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
-  const [installed, setInstalled] = useState<{ id: string; title: string; sha: string } | null>(
-    null,
-  );
+  const [installed, setInstalled] = useState<{
+    id: string;
+    title: string;
+    sha: string;
+    hidden: number;
+    rules: number;
+  } | null>(null);
   // The engine's list, plus types installed here or announced by TASK_TYPE_ADDED that the list does not show yet.
   const fetched: TaskType[] = types.data?.types ?? [];
   const list: TaskType[] = [
@@ -148,6 +159,7 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setAuthorError(null);
       setInstallError(null);
       setInstalled(null);
+      setLastAnswer(null);
       resetRoute();
       reset({
         description: DEFAULT_TASK_DESCRIPTION,
@@ -160,22 +172,29 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
     setRefusal(null);
     setFailure(null);
     setMapped(null);
+    setLastAnswer(null);
     try {
       const r = await route.mutateAsync(description.trim());
       setMapped({ id: r.package_id, reason: r.reason });
       setChosen(r.package_id);
     } catch (err) {
+      noteAnswer(err);
       if (err instanceof ApiError && isUnverifiable(err.code)) {
-        setRefusal({ message: err.message, types: err.taskTypes ?? null });
+        setRefusal({
+          message: err.message,
+          types: err.taskTypes ?? null,
+          reason: err.detail.reason,
+        });
         // None matched: offer the way out at once, by writing the acceptance test.
         void writeTest();
-      } else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+      } else setFailure(explainError(err, "Something went wrong."));
     }
   };
   const writeTest = async () => {
     setAuthorError(null);
     setInstallError(null);
     setInstalled(null);
+    setLastAnswer(null);
     try {
       const d = await author.mutateAsync(description.trim());
       setDraft(d);
@@ -183,33 +202,42 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
     } catch (err) {
       setDraft(null);
       setEdits(null);
-      setAuthorError(
-        err instanceof ApiError ? err.message : "The acceptance test could not be written.",
-      );
+      noteAnswer(err);
+      setAuthorError(explainError(err, "The acceptance test could not be written."));
     }
   };
   const installDraft = async () => {
     if (!draft || !edits) return;
     setInstallError(null);
+    setLastAnswer(null);
     try {
       // Hidden cases travel inside the draft object; the screen never shows them.
       const r = await install.mutateAsync({ ...draft, ...edits });
       const title = r.title?.trim() || edits.title;
       addTaskType({ id: r.id, title, package_sha256: r.package_sha256 });
-      setInstalled({ id: r.id, title, sha: r.package_sha256 });
+      setInstalled({
+        id: r.id,
+        title,
+        sha: r.package_sha256,
+        hidden: draft.hidden.length,
+        rules: rulesOf(draft.assertions).length,
+      });
       setChosen(r.id);
       setDraft(null);
       setEdits(null);
       setRefusal(null);
     } catch (err) {
-      setInstallError(err instanceof ApiError ? err.message : "The test could not be installed.");
+      noteAnswer(err);
+      setInstallError(explainError(err, "The test could not be installed."));
     }
   };
   const submit = form.handleSubmit(async (v) => {
     try {
       setFailure(null);
       setRefusal(null);
+      setLastAnswer(null);
       await start.mutateAsync({
+        ...(selectedType === null ? {} : { packageId: selectedType }),
         amount: v.amount,
         request: v.description.trim(),
         goal: composeTaskGoal(v.amount, worker, v.description),
@@ -217,9 +245,14 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
       setSent(`Task sent: ${v.amount} tUSD to ${worker}.`);
       setOpen(false);
     } catch (err) {
+      noteAnswer(err);
       if (err instanceof ApiError && isUnverifiable(err.code))
-        setRefusal({ message: err.message, types: err.taskTypes ?? null });
-      else setFailure(err instanceof ApiError ? err.message : "Something went wrong.");
+        setRefusal({
+          message: err.message,
+          types: err.taskTypes ?? null,
+          reason: err.detail.reason,
+        });
+      else setFailure(explainError(err, "Something went wrong."));
     }
   });
   const amount = form.watch("amount");
@@ -329,6 +362,20 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                   {installed.title}. It is selected below.
                 </p>
               )}
+              {installed && (
+                <p role="status" className="text-base">
+                  Installed: {installed.hidden} hidden cases, 3 shown, {installed.rules} rules
+                </p>
+              )}
+              {selectedType && (
+                <p role="status" className="text-base">
+                  Using the type you selected: {list.find((t) => t.id === selectedType)?.title}
+                  {customSha(selectedType)
+                    ? ` (custom · ${hash8(customSha(selectedType) ?? "")})`
+                    : ""}
+                  ; no check needed.
+                </p>
+              )}
               <p id={`${id}-tt`} className="text-base text-subtle">
                 {selectedType
                   ? `Will be verified as: ${selectedType.toUpperCase()}. The buyer agent confirms the match before any payment.`
@@ -380,6 +427,11 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
                 className=" border border-rule-soft border-l-4 border-l-bad bg-card px-4 py-2"
               >
                 <p className="font-semibold">{refusal.message}</p>
+                {refusal.reason && (
+                  <p className="text-base">
+                    Routing: the buyer agent answered none: {refusal.reason}
+                  </p>
+                )}
                 <p className="text-base">Task types available today:</p>
                 <ul>
                   {(refusal.types ?? list).map((t) => (
@@ -422,6 +474,14 @@ export function NewTaskButton({ openSignal = 0 }: { openSignal?: number }) {
               >
                 {failure}
               </p>
+            )}
+            {lastAnswer && (
+              <details>
+                <summary className="cursor-pointer text-sm text-subtle">Last answer</summary>
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-sm">
+                  {lastAnswer}
+                </pre>
+              </details>
             )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>

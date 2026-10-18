@@ -280,3 +280,26 @@ test("a package the verifier lists as usable:false is not adopted", async () => 
   expect(r.statusCode).toBe(503);
   expect(readdirSync(s.root)).toEqual([]);
 });
+
+test("200 reports how many cases and rules were installed", async () => {
+  const s = await setup();
+  const r = await s.post(draft());
+  expect(r.statusCode).toBe(200);
+  const j = r.json() as { hidden_cases: number; visible_cases: number; rules: number };
+  expect(j.hidden_cases).toBe(5);
+  expect(j.visible_cases).toBe(3);
+  expect(j.rules).toBe(1);
+});
+
+test("an unexpected install failure answers INSTALL_FAILED with a plain message", async () => {
+  const s = await setup();
+  s.bus.publish = () => {
+    throw new Error("boom /secret/path");
+  };
+  const r = await s.post(draft());
+  expect(r.statusCode).toBe(500);
+  const j = r.json() as { ok: boolean; code: string; message: string };
+  expect(j.ok).toBe(false);
+  expect(j.code).toBe("INSTALL_FAILED");
+  expect(j.message).not.toContain("/secret");
+});

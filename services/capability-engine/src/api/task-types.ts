@@ -304,7 +304,13 @@ export function buildManifest(d: Draft, name: string, judgeSha: string): Record<
   };
 }
 
-export type InstallError = { status: 422 | 503 | 500; code: string; message: string };
+export type InstallError = {
+  status: 422 | 503 | 500;
+  code: string;
+  message: string;
+  /** The underlying exception (500 only); logged by the route, never sent to the caller. */
+  cause?: unknown;
+};
 
 export interface InstallDeps {
   root: string;
@@ -440,6 +446,7 @@ async function installLocked(
       status: 500,
       code: "INSTALL_FAILED",
       message: "The test could not be written to disk. Nothing was installed.",
+      cause: e,
     };
   }
   const listed = await verifierLists(
@@ -471,6 +478,21 @@ async function installLocked(
   return { ok: true, entry: written.entry };
 }
 
+/** How many checks the draft's assertions switch on (shown in the dialog). */
+function countRules(a: Assertions): number {
+  let n = 0;
+  if (a.output_keys_required?.length) n++;
+  if (a.max_output_bytes !== undefined) n++;
+  if (a.numbers_subset_of_input) n++;
+  if (a.required_tokens?.length) n++;
+  if (a.forbidden_tokens?.length) n++;
+  return n;
+}
+
+function safeSlug(draft: unknown): string | undefined {
+  return isObj(draft) && typeof draft.title === "string" ? slugOf(draft.title) : undefined;
+}
+
 export interface TaskTypeRouteDeps extends InstallDeps {
   bus: EventBus;
   rateLimit?: { max: number; windowMs: number };
@@ -490,6 +512,13 @@ export function registerTaskTypeInstall(app: FastifyInstance, d: TaskTypeRouteDe
     try {
       const r = await installDraft(draft, d);
       if (!r.ok) {
+        // Never the draft or the request text: only the code, the (slug of the) title when it is a string, the message.
+        if (r.cause !== undefined)
+          app.log.error(
+            { code: r.code, err: r.cause instanceof Error ? r.cause.stack : String(r.cause) },
+            r.message,
+          );
+        else app.log.warn({ code: r.code, slug: safeSlug(draft) }, r.message);
         reply.code(r.status);
         return { ok: false, code: r.code, message: r.message };
       }
@@ -502,8 +531,21 @@ export function registerTaskTypeInstall(app: FastifyInstance, d: TaskTypeRouteDe
           },
           d.now(),
         );
-      return { ok: true, id: r.entry.id, package_sha256: r.entry.hash, title: r.entry.title };
-    } catch {
+      const dr = draft as Draft;
+      return {
+        ok: true,
+        id: r.entry.id,
+        package_sha256: r.entry.hash,
+        title: r.entry.title,
+        hidden_cases: dr.hidden.length,
+        visible_cases: dr.visible.length,
+        rules: countRules(dr.assertions),
+      };
+    } catch (err) {
+      app.log.error(
+        { code: "INSTALL_FAILED", err: err instanceof Error ? err.stack : String(err) },
+        "task type install failed",
+      );
       reply.code(500);
       return {
         ok: false,

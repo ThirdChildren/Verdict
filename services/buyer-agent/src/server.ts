@@ -12,7 +12,7 @@ import { AgentError, BuyerAgent } from "./agent.js";
 import { type ActiveCap, compromisedAgentAttempt } from "./attack.js";
 import type { EngineClient } from "./engine-client.js";
 import type { WorkerDirectory } from "./identities.js";
-import { DEFAULT_TASK_TYPES } from "./prompts.js";
+import { DEFAULT_TASK_TYPES, type RouteTaskType } from "./prompts.js";
 
 export const SERVICE = "buyer-agent";
 
@@ -38,7 +38,9 @@ export type ServerDeps = {
 
 const failMessage = (err: unknown) => (err instanceof AgentError ? err.message : String(err));
 
-const goalBody = z.object({ goal: z.string().min(3).max(1000) }).strict();
+const goalBody = z
+  .object({ goal: z.string().min(3).max(1000), package_id: z.string().min(1).max(100).optional() })
+  .strict();
 
 export function buildServer(deps: ServerDeps = {}): FastifyInstance {
   const app = Fastify({ logger: deps.logger === false ? false : loggerOptions(SERVICE) });
@@ -78,9 +80,11 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
           ? 422
           : err.code === "COUNTERPARTY_NOT_ALLOWED"
             ? 403
-            : err.code === "LLM_TIMEOUT"
-              ? 504
-              : 502,
+            : err.code === "CATALOGUE_UNAVAILABLE"
+              ? 503
+              : err.code === "LLM_TIMEOUT"
+                ? 504
+                : 502,
       );
       return { ok: false, code: err.code, message: err.message };
     }
@@ -127,18 +131,38 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
       return reply
         .code(503)
         .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
+    const request = body.data.request;
+    let types: RouteTaskType[];
     try {
-      const types = deps.taskTypes ? await deps.taskTypes() : DEFAULT_TASK_TYPES;
-      const r = await agent.route(body.data.request, types.length > 0 ? types : DEFAULT_TASK_TYPES);
+      types = deps.taskTypes ? await deps.taskTypes() : DEFAULT_TASK_TYPES;
+    } catch (err) {
+      app.log.warn({ err: failMessage(err) }, "route: catalogue unavailable");
+      return reply.code(503).send({
+        ok: false,
+        code: "CATALOGUE_UNAVAILABLE",
+        message: "The list of verifiable task types is not available right now. Nothing was sent.",
+      });
+    }
+    try {
+      const r = await agent.route(request, types.length > 0 ? types : DEFAULT_TASK_TYPES);
+      app.log.info(
+        { request: request.slice(0, 120), package_id: r.package_id, reason: r.reason },
+        "route decision",
+      );
       return { ok: true, package_id: r.package_id, reason: r.reason };
     } catch (err) {
       if (err instanceof AgentError && err.code === "TASK_NOT_VERIFIABLE") {
-        const types = deps.taskTypes ? await deps.taskTypes().catch(() => []) : DEFAULT_TASK_TYPES;
+        app.log.info(
+          { request: request.slice(0, 120), package_id: "none", reason: err.reason },
+          "route decision",
+        );
         reply.code(422);
         return {
           ok: false,
           code: err.code,
           message: err.message,
+          package_id: "none",
+          reason: err.reason ?? "",
           task_types: types.map((t) => ({ id: t.id, title: t.title ?? t.id })),
         };
       }
@@ -187,7 +211,15 @@ export function buildServer(deps: ServerDeps = {}): FastifyInstance {
         .code(503)
         .send({ ok: false, code: "NOT_READY", message: "The local model is not loaded yet." });
     try {
-      const { intent, thinking, route } = await agent.planIntentWithThinking(body.data.goal);
+      const { intent, thinking, route } = await agent.planIntentWithThinking(
+        body.data.goal,
+        body.data.package_id,
+      );
+      if (body.data.package_id)
+        app.log.info(
+          { package_id: body.data.package_id },
+          "routing skipped: package bound by the engine",
+        );
       // Intent fields stay at the top level (older readers); `intent` and `thinking` sit beside them.
       emit("intent.proposed", {
         ...intent,

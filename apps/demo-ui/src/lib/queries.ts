@@ -89,11 +89,17 @@ export const useSignMandate = () =>
 export function useStartTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { amount: string; goal: string; request: string }) => {
-      // 1. the buyer maps the text to a task type (or refuses), 2. the engine binds it, 3. the buyer plans.
-      const routed = await routeRequest(v.request);
-      await newTask(v.amount, routed.package_id, v.request);
-      await submitTaskGoal(v.goal);
+    mutationFn: async (v: {
+      amount: string;
+      goal: string;
+      request: string;
+      packageId?: string;
+    }) => {
+      // A type chosen on screen (listed or just installed) is used as it is: no routing call.
+      // Without one, 1. the buyer maps the text to a task type (or refuses), 2. the engine binds it, 3. the buyer plans.
+      const packageId = v.packageId ?? (await routeRequest(v.request)).package_id;
+      await newTask(v.amount, packageId, v.request);
+      await submitTaskGoal(v.goal, packageId);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.tasks });

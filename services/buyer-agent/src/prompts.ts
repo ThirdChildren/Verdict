@@ -38,11 +38,16 @@ export const DEFAULT_TASK_TYPES: RouteTaskType[] = [
 
 /** Routing prompt: pick the one package whose description the request fits exactly, else abstain with "none". */
 export function routeSystem(types: RouteTaskType[]): string {
-  const list = types.map((t) => `- ${t.id}: ${t.description}`).join("\n");
+  const list = types
+    .map((t) => `- ${t.id} (${t.title ?? t.id}): ${t.description || t.title || t.id}`)
+    .join("\n");
   return `You decide which automatic test package can verify the work a person wants to buy. Reply with a single JSON object only: {"package_id": <id or "none">, "reason": <one short sentence>}.
 Verdict only buys work that one of these packages can verify:
 ${list}
 Pick a package_id ONLY if the request asks for exactly what that package's description says. If it is close but different, or fits none, reply "none". When unsure, reply "none": refusing is correct and costs nothing; a wrong match wastes money.
+Positive examples:
+- "Write a script that turns my CSV into JSON" -> {"package_id":"csv2json-v1","reason":"It asks for a CSV to JSON converter."}
+- "Tidy up my JSON so keys are sorted and formatting is consistent" -> {"package_id":"json-normalise-v1","reason":"It asks for JSON normalisation."}
 Negative examples:
 - "Convert this JSON file to CSV" -> {"package_id":"none","reason":"The packages convert CSV to JSON or normalise JSON, not JSON to CSV."}
 - "Build me a snake game" -> {"package_id":"none","reason":"No package verifies a game."}`;

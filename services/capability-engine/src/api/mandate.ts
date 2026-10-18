@@ -305,6 +305,10 @@ export function registerMandateRoutes(app: FastifyInstance, d: MandateDeps): voi
             },
             d.now(),
           );
+          app.log.warn(
+            { code: "TASK_NOT_VERIFIABLE", package_id: wanted ?? null },
+            "task refused: not a verifiable task type",
+          );
           reply.code(422);
           return {
             ok: false,

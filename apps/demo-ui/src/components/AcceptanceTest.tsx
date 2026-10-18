@@ -2,7 +2,7 @@ import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type Draft, FEASIBLE_LINE, hiddenLine, ruleText } from "../lib/authoring.js";
+import { type Draft, FEASIBLE_LINE, hiddenLine, rulesOf } from "../lib/authoring.js";
 
 const AREA =
   "min-h-11 w-full border border-input bg-card px-2 py-1 font-mono text-sm text-ink outline-none focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
@@ -21,6 +21,7 @@ export function AcceptanceTest(props: {
 }) {
   const id = useId();
   const { draft, edits } = props;
+  const rules = rulesOf(draft.assertions);
   const setCase = (i: number, key: "input" | "expected", v: string) =>
     props.onEdit({
       ...edits,
@@ -105,13 +106,13 @@ export function AcceptanceTest(props: {
         </tbody>
       </table>
       <p className="text-base">{hiddenLine(draft.hidden.length)}</p>
-      {draft.assertions.length > 0 && (
+      {rules.length > 0 && (
         <div>
           <p className="font-semibold">The rules, in words</p>
           <ul className="list-inside list-disc text-base">
-            {draft.assertions.map((r, i) => (
+            {rules.map((r, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: rules are a fixed list
-              <li key={i}>{ruleText(r)}</li>
+              <li key={i}>{r}</li>
             ))}
           </ul>
         </div>

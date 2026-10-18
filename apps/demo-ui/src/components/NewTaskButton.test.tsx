@@ -151,7 +151,7 @@ describe("NewTaskButton task types", () => {
       (within(d).getByRole("button", { name: /start task/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
-  it("renders a TASK_NOT_VERIFIABLE refusal in place and sends nothing else", async () => {
+  it("renders a routing refusal from Check in place, with the reason and the raw last answer", async () => {
     const calls = stubFetch(
       () => json(200, { task_types: MOCK_TASK_TYPES }),
       () =>
@@ -159,11 +159,12 @@ describe("NewTaskButton task types", () => {
           ok: false,
           code: "TASK_NOT_VERIFIABLE",
           message: "Verdict only buys work it can verify.",
+          reason: "No type reads a poem.",
         }),
     );
     const d = await open();
     await within(d).findAllByRole("radio");
-    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
     const alert = await waitFor(() => {
       const a = within(d)
         .getAllByRole("alert")
@@ -172,10 +173,99 @@ describe("NewTaskButton task types", () => {
       return a;
     });
     expect(within(alert).getByText("csv2json-v1")).toBeTruthy();
-    expect(within(alert).getByText("json-normalise-v1")).toBeTruthy();
-    // Refused at the routing step: nothing reached the engine.
-    expect(calls).toHaveLength(1);
+    expect(
+      within(alert).getByText("Routing: the buyer agent answered none: No type reads a poem."),
+    ).toBeTruthy();
     expect(calls[0]?.url).toMatch(/\/api\/route$/);
+    expect(calls.some((c) => c.url.endsWith("/api/mandate/task"))).toBe(false);
+    const raw = within(d).getByText("Last answer").closest("details");
+    expect(raw?.textContent).toContain('"reason": "No type reads a poem."');
+  });
+  it("uses the selected type without calling /api/route, and tells the buyer the package", async () => {
+    const calls = stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      (url) =>
+        url.endsWith("/api/plan")
+          ? json(200, { ok: true, decision: { status: "FORWARDED" } })
+          : json(200, { ok: true, cap_hash: "a".repeat(64) }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    expect(within(d).getByText(/Using the type you selected: .*; no check needed\./)).toBeTruthy();
+    fireEvent.click(within(d).getAllByRole("radio")[1] as HTMLElement);
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/api/plan"))).toBe(true));
+    expect(calls.some((c) => c.url.endsWith("/api/route"))).toBe(false);
+    expect(calls.find((c) => c.url.endsWith("/api/mandate/task"))?.body).toContain(
+      '"package_id":"json-normalise-v1"',
+    );
+    expect(calls.find((c) => c.url.endsWith("/api/plan"))?.body).toContain(
+      '"package_id":"json-normalise-v1"',
+    );
+  });
+  it("shows the engine's BLOCKED decision from /api/plan instead of 'Task sent'", async () => {
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      (url) =>
+        url.endsWith("/api/plan")
+          ? json(200, {
+              ok: true,
+              decision: { status: "BLOCKED", code: "OVER_BUDGET", message: "Too much." },
+            })
+          : json(200, { ok: true, cap_hash: "a".repeat(64) }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    expect(
+      await within(d).findByText("The engine blocked the task: OVER_BUDGET Too much."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Task sent/)).toBeNull();
+  });
+  it("shows an ERROR decision as the buyer failing to reach the engine", async () => {
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      (url) =>
+        url.endsWith("/api/plan")
+          ? json(200, { ok: true, decision: { status: "ERROR", message: "ECONNREFUSED" } })
+          : json(200, { ok: true, cap_hash: "a".repeat(64) }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    expect(
+      await within(d).findByText("The buyer could not reach the engine: ECONNREFUSED"),
+    ).toBeTruthy();
+  });
+  it("names the origin to allow on a 403", async () => {
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      () => json(403, { ok: false, code: "FORBIDDEN_ORIGIN", message: "Origin refused." }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    expect(
+      await within(d).findByText(
+        new RegExp(
+          `set VERDICT_UI_ORIGIN=${window.location.origin} on the engine, signer and buyer`,
+        ),
+      ),
+    ).toBeTruthy();
+  });
+  it("explains CATALOGUE_UNAVAILABLE from /api/route", async () => {
+    stubFetch(
+      () => json(200, { ok: true, types: MOCK_TASK_TYPES }),
+      () => json(503, { ok: false, code: "CATALOGUE_UNAVAILABLE", message: "engine down" }),
+    );
+    const d = await open();
+    await within(d).findAllByRole("radio");
+    fireEvent.click(within(d).getByRole("button", { name: /^check$/i }));
+    expect(
+      await within(d).findByText(
+        "The buyer agent cannot read the engine's task-type list (engine down)",
+      ),
+    ).toBeTruthy();
   });
   it("CHECK shows the buyer's mapping and SEND carries package_id and request", async () => {
     const calls = stubFetch(
@@ -294,7 +384,7 @@ describe("NewTaskButton acceptance test", () => {
       { input: "0 0", expected: "0" },
     ],
     hidden: [1, 2, 3, 4, 5].map((n) => ({ input: `${n} 0`, expected: `${n}` })),
-    assertions: ["One number, nothing else."],
+    assertions: { max_output_bytes: 4096, forbidden_tokens: ["error"] } as unknown,
     ...over,
   });
   const authorBody = (top: Record<string, unknown> = {}) => {
@@ -332,8 +422,77 @@ describe("NewTaskButton acceptance test", () => {
     const panel = await within(d).findByRole("region", { name: /acceptance test/i });
     expect(within(panel).getByText(/reads a file and prints a result/)).toBeTruthy();
     expect(within(panel).getByText(/5 more cases stay hidden from the worker/)).toBeTruthy();
-    expect(within(panel).getByText("One number, nothing else.")).toBeTruthy();
+    expect(within(panel).getByText("Output at most 4096 bytes")).toBeTruthy();
+    expect(within(panel).getByText("Must not contain: error")).toBeTruthy();
     expect(within(panel).getAllByRole("textbox")).toHaveLength(2 + 6);
+  });
+  it("reads an empty assertions object and counts the rules after install", async () => {
+    stub(
+      () => {
+        const { feasibility, reason, ...rest } = draft({ assertions: {} });
+        return json(200, { ok: true, feasibility, reason, draft: rest });
+      },
+      () => json(200, { ok: true, id: "custom-ab12cd34-v1", package_sha256: "ab12cd34".repeat(8) }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    expect(within(d).queryByText("The rules, in words")).toBeNull();
+    fireEvent.click(within(d).getByRole("button", { name: /install test and use it/i }));
+    expect(await within(d).findByText("Installed: 5 hidden cases, 3 shown, 0 rules")).toBeTruthy();
+  });
+  it("sends the assertions object through unchanged", async () => {
+    const posted = stub(
+      () => authorBody(),
+      () => json(200, { ok: true, id: "custom-ab12cd34-v1", package_sha256: "ab12cd34".repeat(8) }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    fireEvent.click(within(d).getByRole("button", { name: /install test and use it/i }));
+    await within(d).findByText(/Installed: 5 hidden cases, 3 shown, 2 rules/);
+    const sent = JSON.parse(posted.find((p) => p.url.endsWith("/api/task-types"))?.body ?? "{}");
+    expect(sent.draft.assertions).toEqual({ max_output_bytes: 4096, forbidden_tokens: ["error"] });
+  });
+  it("names the zod path when the buyer's test cannot be read", async () => {
+    stub(
+      () => json(200, { ok: true, draft: { title: "x" } }),
+      () => json(200, { ok: true }),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    expect(
+      await within(d).findByText(/The buyer agent's test could not be read: feasibility: /),
+    ).toBeTruthy();
+  });
+  it("uses an installed custom type on start without calling /api/route", async () => {
+    const posted = stub(
+      () => authorBody(),
+      (() => {
+        let n = 0;
+        return () =>
+          json(
+            200,
+            ++n === 1
+              ? { ok: true, id: "custom-ab12cd34-v1", package_sha256: "ab12cd34".repeat(8) }
+              : { ok: true, cap_hash: "a".repeat(64) },
+          );
+      })(),
+    );
+    const d = await open();
+    fireEvent.click(within(d).getByRole("button", { name: /write a test/i }));
+    await within(d).findByRole("region", { name: /acceptance test/i });
+    fireEvent.click(within(d).getByRole("button", { name: /install test and use it/i }));
+    await within(d).findAllByText(/Installed: /);
+    expect(
+      within(d).getByText(/Using the type you selected: .*\(custom · ab12cd34\); no check needed/),
+    ).toBeTruthy();
+    fireEvent.click(within(d).getByRole("button", { name: /start task/i }));
+    await waitFor(() => expect(posted.some((p) => p.url.endsWith("/api/plan"))).toBe(true));
+    expect(posted.some((p) => p.url.endsWith("/api/route"))).toBe(false);
+    expect(posted.find((p) => p.url.endsWith("/api/mandate/task"))?.body).toContain(
+      '"package_id":"custom-ab12cd34-v1"',
+    );
   });
   it("shows the reframe sentence", async () => {
     stub(

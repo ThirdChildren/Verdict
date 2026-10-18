@@ -15,13 +15,18 @@ export const draftSchema = z
     input_ext: z.string().optional(),
     visible: z.array(pair),
     hidden: z.array(pair),
-    assertions: z.array(rule).default([]),
+    assertions: z.union([z.record(z.string(), z.unknown()), z.array(rule)]).default([]),
   })
   .passthrough();
 export type Draft = z.infer<typeof draftSchema>;
 
 /** Reads the author answer: the top-level feasibility, reason and reframe are merged into one draft object. */
 export function parseAuthorAnswer(raw: unknown): Draft | null {
+  return readAuthorAnswer(raw).draft;
+}
+
+/** Same, with the first zod problem as "<path>: <message>" when the answer cannot be read. */
+export function readAuthorAnswer(raw: unknown): { draft: Draft | null; problem: string } {
   const o = z
     .object({
       feasibility: z.string().optional(),
@@ -30,7 +35,7 @@ export function parseAuthorAnswer(raw: unknown): Draft | null {
       draft: z.record(z.string(), z.unknown()),
     })
     .safeParse(raw);
-  if (!o.success) return null;
+  if (!o.success) return { draft: null, problem: firstProblem(o.error, "answer") };
   const { draft, feasibility, reason, reframe } = o.data;
   const merged = {
     ...draft,
@@ -39,7 +44,15 @@ export function parseAuthorAnswer(raw: unknown): Draft | null {
     ...(reframe === undefined ? {} : { reframe }),
   };
   const r = draftSchema.safeParse(merged);
-  return r.success ? r.data : null;
+  return r.success
+    ? { draft: r.data, problem: "" }
+    : { draft: null, problem: firstProblem(r.error, "draft") };
+}
+
+function firstProblem(error: z.ZodError, root: string): string {
+  const i = error.issues[0];
+  if (!i) return `${root}: invalid`;
+  return `${i.path.length > 0 ? i.path.join(".") : root}: ${i.message}`;
 }
 
 /** What POST /api/task-types answers on success. */
@@ -86,8 +99,37 @@ export function parseTypeAddedEvent(raw: unknown): TaskTypeAdded | null {
   };
 }
 
+const listOf = (v: unknown): string =>
+  Array.isArray(v) ? v.map((x) => String(x)).join(", ") : String(v);
+
+/** One engine assertion key as a sentence; unknown keys stay readable as key and value. */
+export function assertionSentence(key: string, v: unknown): string | null {
+  switch (key) {
+    case "max_output_bytes":
+      return `Output at most ${String(v)} bytes`;
+    case "forbidden_tokens":
+      return `Must not contain: ${listOf(v)}`;
+    case "required_tokens":
+      return `Must contain: ${listOf(v)}`;
+    case "output_keys_required":
+      return `Output must have the keys: ${listOf(v)}`;
+    case "numbers_subset_of_input":
+      return v ? "Every number in the output must appear in the input" : null;
+    default:
+      return `${key}: ${JSON.stringify(v)}`;
+  }
+}
+
+/** All rules of a draft as sentences: the engine's object form or a list of rules. */
+export function rulesOf(a: Draft["assertions"]): string[] {
+  if (Array.isArray(a)) return a.map(ruleText);
+  return Object.entries(a)
+    .map(([k, v]) => assertionSentence(k, v))
+    .filter((x): x is string => x !== null);
+}
+
 /** A rule as one sentence: strings as they are, objects by their first text-like field. */
-export function ruleText(r: Draft["assertions"][number]): string {
+export function ruleText(r: string | Record<string, unknown>): string {
   if (typeof r === "string") return r;
   for (const k of ["text", "description", "rule", "message", "says"]) {
     const v = r[k];

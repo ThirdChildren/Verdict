@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { AgentError, BuyerAgent } from "./agent.js";
 import { EngineClient } from "./engine-client.js";
 import { routeSchema } from "./llm-schemas.js";
-import { DEFAULT_TASK_TYPES } from "./prompts.js";
+import { DEFAULT_TASK_TYPES, routeSystem } from "./prompts.js";
 import { buildServer } from "./server.js";
 
 const WORKERS = { worker: `eip191:0x${"b".repeat(40)}` };
@@ -44,7 +44,7 @@ describe("routing", () => {
     const { llm, agent } = mk([{ package_id: "json-normalise-v1", reason: "fits" }, intent]);
     await agent.planIntent("Normalise my JSON for 1.20 tUSD");
     const sys = llm.calls[0]?.messages[0]?.content ?? "";
-    expect(sys).toContain("json-normalise-v1: Canonical JSON.");
+    expect(sys).toContain("json-normalise-v1 (json-normalise-v1): Canonical JSON.");
     expect(sys).toContain("none");
     expect(sys).toContain("JSON file to CSV");
     expect(sys).toContain("snake game");
@@ -164,5 +164,76 @@ describe("routing", () => {
         { id: "json-normalise-v1", title: "json-normalise-v1" },
       ],
     });
+  });
+
+  test("a package bound by the engine skips routing and is used", async () => {
+    const llm = new FakeLlm([intent]);
+    const app = buildServer({
+      logger: false,
+      llm,
+      workers: WORKERS,
+      taskTypes: async () => TYPES,
+      getCapHash: async () => null,
+      now,
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/plan",
+      payload: { goal: "Pay 1.20 tUSD to worker to tidy my JSON", package_id: "custom-v1" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(llm.calls).toHaveLength(1);
+    const ev = (await app.inject({ method: "GET", url: "/api/events" })).json().events;
+    expect(ev[0].data.package_id).toBe("custom-v1");
+    expect(ev[0].data.route_reason).toContain("routing skipped");
+  });
+
+  test("the prompt line carries the title when a type has no description", () => {
+    expect(
+      routeSystem([{ id: "csv2json-v1", title: "CSV to JSON converter", description: "" }]),
+    ).toContain("- csv2json-v1 (CSV to JSON converter): CSV to JSON converter");
+  });
+
+  test("a refusal carries the model's reason and package_id none", async () => {
+    const app = buildServer({
+      logger: false,
+      llm: new FakeLlm([{ package_id: "none", reason: "No package verifies a game." }]),
+      workers: WORKERS,
+      taskTypes: async () => TYPES,
+      now,
+    });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/route",
+      payload: { request: "snake game" },
+    });
+    expect(r.statusCode).toBe(422);
+    expect(r.json()).toMatchObject({ package_id: "none", reason: "No package verifies a game." });
+  });
+
+  test("a failing catalogue answers 503 CATALOGUE_UNAVAILABLE on route and plan", async () => {
+    const app = buildServer({
+      logger: false,
+      llm: new FakeLlm([]),
+      workers: WORKERS,
+      taskTypes: async () => {
+        throw new Error("down");
+      },
+      now,
+    });
+    const a = await app.inject({
+      method: "POST",
+      url: "/api/route",
+      payload: { request: "csv please" },
+    });
+    expect(a.statusCode).toBe(503);
+    expect(a.json().code).toBe("CATALOGUE_UNAVAILABLE");
+    const b = await app.inject({
+      method: "POST",
+      url: "/api/plan",
+      payload: { goal: "Pay 1.20 tUSD for csv" },
+    });
+    expect(b.statusCode).toBe(503);
+    expect(b.json().code).toBe("CATALOGUE_UNAVAILABLE");
   });
 });
